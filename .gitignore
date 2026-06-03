@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Generated gRPC stubs (regenerated via `make proto`)
+src/generated/*_pb2.py
+src/generated/*_pb2_grpc.py
+src/generated/*_pb2.pyi
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

@@ -1,0 +1,95 @@
+syntax = "proto3";
+
+// =============================================================================
+//
+// Contrato gRPC do no distribuido.
+//
+// Principio de projeto: TODAS as mensagens carregam o campo `lamport_ts`,
+// pois o relogio logico de Lamport e carimbado em cada troca de mensagem.
+// Essa e a "cola" entre os tres algoritmos: o Ricart-Agrawala usa o par
+// (lamport_ts, node_id) como criterio de ordenacao total das requisicoes
+// de Secao Critica, e o Bully tambem evolui o relogio a cada interacao.
+//
+// Todas as RPCs sao UNARIAS e seguem o padrao fire-and-forget: retornam um
+// Ack imediato. NENHUM handler bloqueia esperando a Secao Critica liberar.
+// Quando um REQUEST precisa ser adiado (Ricart-Agrawala), o receptor apenas
+// registra o pedido na fila de adiados e responde Ack na hora; ao SAIR da
+// Secao Critica, o no inicia proativamente uma RPC ReplyAccess de volta.
+// =============================================================================
+
+package mc714;
+
+// Servico exposto por cada no do cluster.
+service NodeService {
+  // --- Ricart-Agrawala (exclusao mutua) ---
+
+  // REQUEST: um no pede para entrar na Secao Critica.
+  // O receptor decide na hora se concede (responde via ReplyAccess) ou adia.
+  // Retorna Ack imediatamente (nunca bloqueia).
+  rpc RequestAccess(CsRequest) returns (Ack);
+
+  // REPLY/OK: concessao de permissao para entrar na Secao Critica.
+  // Enviada imediatamente (se o no nao disputa) ou de forma diferida,
+  // proativamente, quando o detentor da Secao Critica a libera.
+  rpc ReplyAccess(CsReply) returns (Ack);
+
+  // --- Bully (eleicao de lider) ---
+
+  // ELECTION: enviada aos nos de ID MAIOR para iniciar/propagar uma eleicao.
+  rpc Election(ElectionMsg) returns (Ack);
+
+  // COORDINATOR: anuncio de que o remetente e o novo lider eleito.
+  rpc Coordinator(CoordinatorMsg) returns (Ack);
+
+  // --- Deteccao de falhas ---
+
+  // HEARTBEAT: ping de vivacidade, usado para detectar a queda do lider.
+  rpc Heartbeat(Ping) returns (Pong);
+}
+
+// -----------------------------------------------------------------------------
+// Mensagens
+// -----------------------------------------------------------------------------
+
+// REQUEST do Ricart-Agrawala.
+message CsRequest {
+  int32 node_id = 1;     // ID do no solicitante
+  int64 lamport_ts = 2;  // timestamp de Lamport do pedido (criterio de prioridade)
+}
+
+// REPLY/OK do Ricart-Agrawala.
+message CsReply {
+  int32 node_id = 1;     // ID do no que concede a permissao
+  int64 lamport_ts = 2;  // timestamp de Lamport no momento do envio
+}
+
+// Mensagem ELECTION do Bully.
+message ElectionMsg {
+  int32 node_id = 1;     // ID do no que iniciou/propaga a eleicao
+  int64 lamport_ts = 2;  // timestamp de Lamport
+}
+
+// Anuncio COORDINATOR do Bully.
+message CoordinatorMsg {
+  int32 leader_id = 1;   // ID do no que se declara lider
+  int64 lamport_ts = 2;  // timestamp de Lamport
+}
+
+// Heartbeat (ping) para deteccao de falha do lider.
+message Ping {
+  int32 node_id = 1;     // ID do no que envia o heartbeat
+  int64 lamport_ts = 2;  // timestamp de Lamport
+}
+
+// Resposta ao heartbeat (pong).
+message Pong {
+  int32 node_id = 1;     // ID do no que responde
+  int64 lamport_ts = 2;  // timestamp de Lamport
+  int32 leader_id = 3;   // quem o respondente considera ser o lider atual
+}
+
+// ACK generico retornado por todas as RPCs fire-and-forget.
+message Ack {
+  int32 node_id = 1;     // ID do no que confirma o recebimento
+  int64 lamport_ts = 2;  // timestamp de Lamport apos processar a mensagem
+}

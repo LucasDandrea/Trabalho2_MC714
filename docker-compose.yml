@@ -1,0 +1,59 @@
+services:
+  node1:
+    build: .
+    container_name: node1
+    hostname: node1
+    environment:
+      - NODE_ID=1
+      - PEERS=node1:50051,node2:50051,node3:50051,node4:50051,node5:50051
+      - CS_INTERVAL=5
+    networks:
+      - cluster
+
+  node2:
+    build: .
+    container_name: node2
+    hostname: node2
+    environment:
+      - NODE_ID=2
+      - PEERS=node1:50051,node2:50051,node3:50051,node4:50051,node5:50051
+      - CS_INTERVAL=5
+    networks:
+      - cluster
+
+  node3:
+    build: .
+    container_name: node3
+    hostname: node3
+    environment:
+      - NODE_ID=3
+      - PEERS=node1:50051,node2:50051,node3:50051,node4:50051,node5:50051
+      - CS_INTERVAL=5
+    networks:
+      - cluster
+
+  node4:
+    build: .
+    container_name: node4
+    hostname: node4
+    environment:
+      - NODE_ID=4
+      - PEERS=node1:50051,node2:50051,node3:50051,node4:50051,node5:50051
+      - CS_INTERVAL=5
+    networks:
+      - cluster
+
+  node5:
+    build: .
+    container_name: node5
+    hostname: node5
+    environment:
+      - NODE_ID=5
+      - PEERS=node1:50051,node2:50051,node3:50051,node4:50051,node5:50051
+      - CS_INTERVAL=5
+    networks:
+      - cluster
+
+networks:
+  cluster:
+    driver: bridge
