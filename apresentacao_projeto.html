@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1280">
+    <title>MC714 - Sistemas Distribuídos | Trabalho 2</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        :root {
+            --bg-deep: #0f0f0f;
+            --bg-card: #1a1a2e;
+            --bg-surface: #16213e;
+            --accent: #0ea5e9;
+            --accent-glow: rgba(14, 165, 233, 0.15);
+            --accent-green: #10b981;
+            --accent-purple: #8b5cf6;
+            --accent-orange: #f59e0b;
+            --accent-red: #ef4444;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --border: rgba(148, 163, 184, 0.1);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg-deep);
+            color: var(--text-primary);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+
+        .deck {
+            position: relative;
+            width: 1280px;
+            height: 720px;
+        }
+
+        .slide {
+            position: absolute;
+            top: 0; left: 0;
+            width: 1280px;
+            height: 720px;
+            padding: 60px 80px;
+            display: none;
+            flex-direction: column;
+            background: var(--bg-deep);
+            overflow: hidden;
+        }
+
+        .slide.active { display: flex; }
+
+        .slide::before {
+            content: '';
+            position: absolute;
+            top: -200px; right: -200px;
+            width: 600px; height: 600px;
+            background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%);
+            pointer-events: none;
+        }
+
+        .slide-number {
+            position: absolute;
+            bottom: 30px; right: 50px;
+            font-size: 13px;
+            color: var(--text-muted);
+            font-weight: 500;
+            letter-spacing: 1px;
+        }
+
+        .progress-bar {
+            position: absolute;
+            bottom: 0; left: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--accent), var(--accent-green));
+            transition: width 0.4s ease;
+        }
+
+        h1 {
+            font-size: 42px;
+            font-weight: 800;
+            line-height: 1.1;
+            margin-bottom: 12px;
+            letter-spacing: -1px;
+        }
+
+        h2 {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            letter-spacing: -0.5px;
+        }
+
+        h3 {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+
+        .subtitle {
+            font-size: 18px;
+            color: var(--text-secondary);
+            font-weight: 400;
+            line-height: 1.5;
+        }
+
+        .tag {
+            display: inline-block;
+            padding: 4px 14px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 16px;
+        }
+
+        .tag-blue { background: rgba(14,165,233,0.15); color: var(--accent); }
+        .tag-green { background: rgba(16,185,129,0.15); color: var(--accent-green); }
+        .tag-purple { background: rgba(139,92,246,0.15); color: var(--accent-purple); }
+        .tag-orange { background: rgba(245,158,11,0.15); color: var(--accent-orange); }
+
+        .two-col {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+            flex: 1;
+            align-items: start;
+            margin-top: 20px;
+        }
+
+        .three-col {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 24px;
+            flex: 1;
+            align-items: start;
+            margin-top: 20px;
+        }
+
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 28px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card::after {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--accent), var(--accent-green));
+            border-radius: 16px 16px 0 0;
+        }
+
+        .card-purple::after { background: linear-gradient(90deg, var(--accent-purple), var(--accent)); }
+        .card-green::after { background: linear-gradient(90deg, var(--accent-green), var(--accent)); }
+        .card-orange::after { background: linear-gradient(90deg, var(--accent-orange), var(--accent-red)); }
+
+        .card .icon {
+            font-size: 28px;
+            margin-bottom: 14px;
+            color: var(--accent);
+        }
+
+        .card-purple .icon { color: var(--accent-purple); }
+        .card-green .icon { color: var(--accent-green); }
+        .card-orange .icon { color: var(--accent-orange); }
+
+        .card h3 { margin-bottom: 8px; }
+        .card p { font-size: 14px; color: var(--text-secondary); line-height: 1.6; }
+
+        .highlight-number {
+            font-size: 48px;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--accent), var(--accent-green));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            line-height: 1;
+            margin-bottom: 6px;
+        }
+
+        .code-block {
+            background: #0d1117;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px 24px;
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            font-size: 13px;
+            line-height: 1.7;
+            overflow: hidden;
+            color: var(--text-secondary);
+        }
+
+        .code-block .kw { color: #ff7b72; }
+        .code-block .fn { color: #d2a8ff; }
+        .code-block .str { color: #a5d6ff; }
+        .code-block .cm { color: #8b949e; }
+        .code-block .num { color: #79c0ff; }
+        .code-block .op { color: #ff7b72; }
+
+        .log-block {
+            background: #0d1117;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 18px 22px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12.5px;
+            line-height: 1.8;
+        }
+
+        .log-block .log-green { color: #3fb950; }
+        .log-block .log-yellow { color: #d29922; }
+        .log-block .log-red { color: #f85149; }
+        .log-block .log-blue { color: #58a6ff; }
+        .log-block .log-purple { color: #bc8cff; }
+        .log-block .log-dim { color: #6e7681; }
+
+        .flow-diagram {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-top: 16px;
+        }
+
+        .flow-step {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 12px 18px;
+            font-size: 13px;
+            font-weight: 500;
+            text-align: center;
+            min-width: 120px;
+        }
+
+        .flow-arrow {
+            color: var(--accent);
+            font-size: 18px;
+        }
+
+        ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        ul li {
+            padding: 8px 0;
+            padding-left: 24px;
+            position: relative;
+            font-size: 15px;
+            color: var(--text-secondary);
+            line-height: 1.6;
+        }
+
+        ul li::before {
+            content: '';
+            position: absolute;
+            left: 0; top: 16px;
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: var(--accent);
+        }
+
+        .badge-row {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-top: 12px;
+        }
+
+        .badge {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px 18px;
+            font-size: 13px;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .badge i { color: var(--accent); }
+
+        .nav-hint {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 12px;
+            color: var(--text-muted);
+            background: rgba(26,26,46,0.9);
+            padding: 8px 20px;
+            border-radius: 20px;
+            border: 1px solid var(--border);
+        }
+
+        .divider {
+            width: 60px;
+            height: 3px;
+            background: linear-gradient(90deg, var(--accent), transparent);
+            border-radius: 2px;
+            margin: 12px 0 20px;
+        }
+
+        .emoji-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+
+        .emoji-table td {
+            padding: 8px 12px;
+            border-bottom: 1px solid var(--border);
+            vertical-align: middle;
+        }
+
+        .emoji-table td:first-child {
+            font-size: 18px;
+            width: 40px;
+            text-align: center;
+        }
+
+        .emoji-table td:nth-child(2) {
+            font-family: monospace;
+            color: var(--accent);
+            font-weight: 600;
+            width: 120px;
+        }
+
+        .emoji-table td:nth-child(3) { color: var(--text-secondary); }
+
+        .cover-title {
+            font-size: 52px;
+            font-weight: 800;
+            letter-spacing: -2px;
+            line-height: 1.05;
+            margin-bottom: 8px;
+        }
+
+        .cover-accent {
+            background: linear-gradient(135deg, var(--accent), var(--accent-green));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+    </style>
+</head>
+<body>
+
+<div class="deck">
+
+    <!-- SLIDE 1: CAPA -->
+    <div class="slide active" id="slide-1">
+        <div style="flex:1; display:flex; flex-direction:column; justify-content:center;">
+            <span class="tag tag-blue">MC714 — Sistemas Distribuídos</span>
+            <h1 class="cover-title">Trabalho 2:<br><span class="cover-accent">Sistema Distribuído com<br>Comunicação Real</span></h1>
+            <div class="divider"></div>
+            <p class="subtitle" style="margin-bottom:30px;">Integração de Relógio de Lamport, Ricart-Agrawala e Bully<br>sobre gRPC + Docker Compose</p>
+            <div style="display:flex; gap:40px; align-items:center;">
+                <div>
+                    <p style="font-size:16px; font-weight:600;">Lucas Bellusci D'Andréa</p>
+                    <p style="font-size:14px; color:var(--text-muted);">RA 206009</p>
+                </div>
+                <div style="width:1px; height:36px; background:var(--border);"></div>
+                <div>
+                    <p style="font-size:14px; color:var(--text-muted);">Unicamp — IC</p>
+                    <p style="font-size:14px; color:var(--text-muted);">1º Semestre 2026</p>
+                </div>
+            </div>
+        </div>
+        <div class="slide-number">01 / 12</div>
+        <div class="progress-bar" style="width:8.33%"></div>
+    </div>
+
+    <!-- SLIDE 2: VISÃO GERAL -->
+    <div class="slide" id="slide-2">
+        <span class="tag tag-green">Visão Geral</span>
+        <h2>Três Algoritmos, Um Sistema Integrado</h2>
+        <p class="subtitle">Os conceitos não funcionam isolados — eles se alimentam mutuamente.</p>
+        <div class="three-col">
+            <div class="card">
+                <div class="icon"><i class="fas fa-clock"></i></div>
+                <h3>Relógio de Lamport</h3>
+                <p>Carimba TODA mensagem com <code>lamport_ts</code>. Garante ordenação causal entre eventos distribuídos.</p>
+                <div style="margin-top:14px;">
+                    <span class="tag tag-blue" style="margin:0;">A "cola"</span>
+                </div>
+            </div>
+            <div class="card card-purple">
+                <div class="icon"><i class="fas fa-lock"></i></div>
+                <h3>Ricart-Agrawala</h3>
+                <p>Exclusão mútua distribuída usando o par <code>(ts, id)</code> de Lamport como critério de prioridade.</p>
+                <div style="margin-top:14px;">
+                    <span class="tag tag-purple" style="margin:0;">Depende do Lamport</span>
+                </div>
+            </div>
+            <div class="card card-green">
+                <div class="icon"><i class="fas fa-crown"></i></div>
+                <h3>Bully (Eleição)</h3>
+                <p>Detecta falha do líder por heartbeat e reelege automaticamente. Tolerância a falhas real.</p>
+                <div style="margin-top:14px;">
+                    <span class="tag tag-green" style="margin:0;">Tolerância a falhas</span>
+                </div>
+            </div>
+        </div>
+        <div class="slide-number">02 / 12</div>
+        <div class="progress-bar" style="width:16.66%"></div>
+    </div>
+
+    <!-- SLIDE 3: STACK TECNOLÓGICA -->
+    <div class="slide" id="slide-3">
+        <span class="tag tag-purple">Stack Tecnológica</span>
+        <h2>Por que Python + gRPC + Docker?</h2>
+        <div class="two-col">
+            <div>
+                <div class="card" style="margin-bottom:20px;">
+                    <div class="icon"><i class="fab fa-python"></i></div>
+                    <h3>Python 3.11</h3>
+                    <p>Máxima legibilidade dos algoritmos. Threading nativo com Lock para concorrência. Setup simples.</p>
+                </div>
+                <div class="card card-green">
+                    <div class="icon"><i class="fas fa-network-wired"></i></div>
+                    <h3>gRPC + Protocol Buffers</h3>
+                    <p>Comunicação <strong>real via TCP</strong>. Contrato tipado (.proto). Sem simulação por arquivos — requisito eliminatório.</p>
+                </div>
+            </div>
+            <div>
+                <div class="card card-purple" style="margin-bottom:20px;">
+                    <div class="icon"><i class="fab fa-docker"></i></div>
+                    <h3>Docker Compose</h3>
+                    <p>5 contêineres isolados em rede bridge. Cada nó é um processo independente com IP próprio.</p>
+                </div>
+                <div class="card card-orange">
+                    <div class="icon"><i class="fas fa-ban"></i></div>
+                    <h3>Proibido: Simulação</h3>
+                    <p>Nenhuma troca de mensagem via arquivos, pipes ou memória compartilhada. Tudo é gRPC real.</p>
+                </div>
+            </div>
+        </div>
+        <div class="slide-number">03 / 12</div>
+        <div class="progress-bar" style="width:25%"></div>
+    </div>
+
+    <!-- SLIDE 4: LAMPORT -->
+    <div class="slide" id="slide-4">
+        <span class="tag tag-blue">Algoritmo 1</span>
+        <h2>Relógio Lógico de Lamport</h2>
+        <p class="subtitle">A "cola" que conecta Ricart-Agrawala ao sistema.</p>
+        <div class="two-col" style="margin-top:24px;">
+            <div>
+                <div class="code-block">
+                    <span class="kw">class</span> <span class="fn">LamportClock</span>:<br>
+                    &nbsp;&nbsp;<span class="kw">def</span> <span class="fn">tick</span>(self) -> int:<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;<span class="cm"># Evento local / PRÉ-ENVIO</span><br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;<span class="kw">with</span> self._lock:<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._time += <span class="num">1</span><br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw">return</span> self._time<br><br>
+                    &nbsp;&nbsp;<span class="kw">def</span> <span class="fn">update</span>(self, recv_ts) -> int:<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;<span class="cm"># Ao RECEBER mensagem</span><br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;<span class="kw">with</span> self._lock:<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._time = <span class="fn">max</span>(self._time, recv_ts) + <span class="num">1</span><br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw">return</span> self._time
+                </div>
+            </div>
+            <div>
+                <div class="card" style="margin-bottom:16px;">
+                    <h3><i class="fas fa-arrow-up" style="color:var(--accent);margin-right:8px;"></i>tick()</h3>
+                    <p>Chamado ANTES de enviar qualquer mensagem. Incrementa o clock local.</p>
+                </div>
+                <div class="card card-green" style="margin-bottom:16px;">
+                    <h3><i class="fas fa-arrow-down" style="color:var(--accent-green);margin-right:8px;"></i>update(T)</h3>
+                    <p>Chamado ao RECEBER. Aplica <code>max(local, T) + 1</code>. Garante causalidade.</p>
+                </div>
+                <div class="card card-orange">
+                    <h3><i class="fas fa-shield-alt" style="color:var(--accent-orange);margin-right:8px;"></i>Thread-Safe</h3>
+                    <p>Lock protege o contador. Log emitido FORA do lock para não segurar I/O.</p>
+                </div>
+            </div>
+        </div>
+        <div class="slide-number">04 / 12</div>
+        <div class="progress-bar" style="width:33.33%"></div>
+    </div>
+
+    <!-- SLIDE 5: RICART-AGRAWALA -->
+    <div class="slide" id="slide-5">
+        <span class="tag tag-purple">Algoritmo 2</span>
+        <h2>Exclusão Mútua — Ricart-Agrawala</h2>
+        <div class="two-col" style="margin-top:16px;">
+            <div>
+                <h3 style="margin-bottom:16px;">Regra de Prioridade</h3>
+                <div class="code-block" style="margin-bottom:18px;">
+                    <span class="cm"># Quem ADIA quem?</span><br>
+                    <span class="kw">if</span> state == HELD <span class="op">or</span> (<br>
+                    &nbsp;&nbsp;state == WANTED <span class="op">and</span><br>
+                    &nbsp;&nbsp;(my_ts, my_id) <span class="op">&lt;</span> (their_ts, their_id)<br>
+                    ):<br>
+                    &nbsp;&nbsp;ADIAR pedido &nbsp;<span class="cm"># tenho prioridade</span><br>
+                    <span class="kw">else</span>:<br>
+                    &nbsp;&nbsp;CONCEDER imediatamente
+                </div>
+                <div class="card" style="padding:16px 20px;">
+                    <p><strong>Ordenação Total:</strong> O par <code>(ts, id)</code> garante desempate determinístico — timestamps iguais são resolvidos pelo ID menor.</p>
+                </div>
+            </div>
+            <div>
+                <h3 style="margin-bottom:16px;">Estados de um Nó</h3>
+                <div class="flow-diagram" style="flex-direction:column; align-items:stretch;">
+                    <div class="flow-step" style="background:var(--bg-surface); border-color:var(--accent-green);">
+                        <i class="fas fa-circle" style="color:var(--accent-green);font-size:10px;"></i> &nbsp;RELEASED — Não quer a CS
+                    </div>
+                    <div style="text-align:center;"><i class="fas fa-arrow-down flow-arrow"></i></div>
+                    <div class="flow-step" style="background:var(--bg-surface); border-color:var(--accent-orange);">
+                        <i class="fas fa-circle" style="color:var(--accent-orange);font-size:10px;"></i> &nbsp;WANTED — Aguardando N-1 REPLYs
+                    </div>
+                    <div style="text-align:center;"><i class="fas fa-arrow-down flow-arrow"></i></div>
+                    <div class="flow-step" style="background:var(--bg-surface); border-color:var(--accent-red);">
+                        <i class="fas fa-circle" style="color:var(--accent-red);font-size:10px;"></i> &nbsp;HELD — Dentro da Seção Crítica
+                    </div>
+                    <div style="text-align:center;"><i class="fas fa-arrow-down flow-arrow"></i></div>
+                    <div class="flow-step" style="background:var(--bg-surface); border-color:var(--accent);">
+                        <i class="fas fa-paper-plane" style="color:var(--accent);font-size:10px;"></i> &nbsp;release_cs() → REPLY adiados
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="slide-number">05 / 12</div>
+        <div class="progress-bar" style="width:41.66%"></div>
+    </div>
+
+    <!-- SLIDE 6: COMUNICAÇÃO gRPC -->
+    <div class="slide" id="slide-6">
+        <span class="tag tag-green">Comunicação</span>
+        <h2>Arquitetura gRPC — Fire-and-Forget</h2>
+        <p class="subtitle" style="margin-bottom:20px;">5 RPCs unárias. Nenhum handler bloqueia. REPLY é proativo.</p>
+        <div class="two-col">
+            <div>
+                <table class="emoji-table">
+                    <tr>
+                        <td><i class="fas fa-hand-paper" style="color:var(--accent-orange);"></i></td>
+                        <td>RequestAccess</td>
+                        <td>Pedir permissão para CS</td>
+                    </tr>
+                    <tr>
+                        <td><i class="fas fa-check" style="color:var(--accent-green);"></i></td>
+                        <td>ReplyAccess</td>
+                        <td>Conceder permissão (proativo)</td>
+                    </tr>
+                    <tr>
+                        <td><i class="fas fa-bolt" style="color:var(--accent-purple);"></i></td>
+                        <td>Election</td>
+                        <td>Bully: contatar IDs maiores</td>
+                    </tr>
+                    <tr>
+                        <td><i class="fas fa-crown" style="color:var(--accent);"></i></td>
+                        <td>Coordinator</td>
+                        <td>Anunciar novo líder</td>
+                    </tr>
+                    <tr>
+                        <td><i class="fas fa-heartbeat" style="color:var(--accent-red);"></i></td>
+                        <td>Heartbeat</td>
+                        <td>Ping/Pong vivacidade</td>
+                    </tr>
+                </table>
+            </div>
+            <div>
+                <div class="card" style="margin-bottom:16px;">
+                    <h3><i class="fas fa-exclamation-triangle" style="color:var(--accent-orange);margin-right:8px;"></i>O Problema</h3>
+                    <p>Se RequestAccess bloqueasse esperando a CS, o ThreadPool do gRPC esgotaria → <strong>deadlock</strong>.</p>
+                </div>
+                <div class="card card-green">
+                    <h3><i class="fas fa-check-circle" style="color:var(--accent-green);margin-right:8px;"></i>A Solução</h3>
+                    <p>REQUEST e REPLY são RPCs separadas. O handler registra e retorna Ack imediato. Ao sair da CS, dispara REPLY proativamente em thread.</p>
+                </div>
+            </div>
+        </div>
+        <div class="slide-number">06 / 12</div>
+        <div class="progress-bar" style="width:50%"></div>
+    </div>
+
+    <!-- SLIDE 7: CONCORRÊNCIA -->
+    <div class="slide" id="slide-7">
+        <span class="tag tag-orange">Concorrência</span>
+        <h2>Sincronização e Thread-Safety</h2>
+        <p class="subtitle" style="margin-bottom:20px;">O gRPC usa ThreadPool (20 workers). Múltiplas threads alteram estado simultaneamente.</p>
+        <div class="three-col">
+            <div class="card">
+                <div class="icon"><i class="fas fa-clock"></i></div>
+                <h3>LamportClock</h3>
+                <p><code>threading.Lock</code> em <code>tick()</code> e <code>update()</code>.</p>
+                <p style="margin-top:8px;">Log emitido <strong>fora</strong> do lock (evita I/O dentro da região crítica).</p>
+            </div>
+            <div class="card card-purple">
+                <div class="icon"><i class="fas fa-lock"></i></div>
+                <h3>RicartAgrawala</h3>
+                <p>Um único lock protege: <code>state</code>, <code>request_ts</code>, <code>_pending_replies</code>, <code>_deferred</code>.</p>
+                <p style="margin-top:8px;">Transição <strong>WANTED→HELD</strong> é atômica dentro de <code>on_reply()</code>.</p>
+            </div>
+            <div class="card card-green">
+                <div class="icon"><i class="fas fa-crown"></i></div>
+                <h3>BullyElection</h3>
+                <p>Lock cobre <code>leader_id</code> e <code>election_in_progress</code>.</p>
+                <p style="margin-top:8px;"><code>on_election()</code> seta flag atomicamente para impedir threads duplicadas.</p>
+            </div>
+        </div>
+        <div style="margin-top:24px; text-align:center;">
+            <div class="badge-row" style="justify-content:center;">
+                <div class="badge"><i class="fas fa-shield-alt"></i> Zero deadlocks</div>
+                <div class="badge"><i class="fas fa-bolt"></i> Zero race conditions</div>
+                <div class="badge"><i class="fas fa-project-diagram"></i> 20 workers no ThreadPool</div>
+            </div>
+        </div>
+        <div class="slide-number">07 / 12</div>
+        <div class="progress-bar" style="width:58.33%"></div>
+    </div>
+
+    <!-- SLIDE 8: BULLY -->
+    <div class="slide" id="slide-8">
+        <span class="tag tag-green">Algoritmo 3</span>
+        <h2>Eleição de Líder — Bully</h2>
+        <div class="two-col" style="margin-top:16px;">
+            <div>
+                <h3 style="margin-bottom:16px;">Fluxo do Algoritmo</h3>
+                <ul>
+                    <li>Heartbeat falha → Líder caiu</li>
+                    <li>Envia ELECTION a todos de ID <strong>maior</strong></li>
+                    <li>Se alguém responde Ack → "OK, eu assumo"</li>
+                    <li>Se ninguém responde → <strong>sou o líder</strong></li>
+                    <li>Anuncia COORDINATOR a todos</li>
+                </ul>
+                <div class="card" style="margin-top:20px; padding:16px 20px;">
+                    <p><i class="fas fa-lightbulb" style="color:var(--accent-orange);margin-right:8px;"></i><strong>Insight:</strong> O sucesso da RPC (Ack) já serve como "OK" do Bully. Não precisamos de mensagem extra.</p>
+                </div>
+            </div>
+            <div>
+                <div class="log-block">
+                    <span class="log-purple">👑 [BULLY] Node 3 | Falha do lider detectada!</span><br>
+                    <span class="log-purple">👑 [BULLY] Node 3 | Iniciando eleicao...</span><br>
+                    <span class="log-dim">&nbsp;&nbsp;&nbsp;contatando IDs maiores: [4, 5]</span><br><br>
+                    <span class="log-purple">👑 [BULLY] Node 4 | Recebeu ELECTION de Node 3</span><br>
+                    <span class="log-dim">&nbsp;&nbsp;&nbsp;Respondo OK (tenho ID maior)</span><br><br>
+                    <span class="log-purple">👑 [BULLY] Node 4 | Nenhum no maior</span><br>
+                    <span class="log-green">&nbsp;&nbsp;&nbsp;SOU O NOVO LIDER!</span><br>
+                    <span class="log-dim">&nbsp;&nbsp;&nbsp;Anunciando COORDINATOR a [1,2,3]</span><br><br>
+                    <span class="log-blue">👑 [BULLY] Node 1 | Reconhece Node 4</span><br>
+                    <span class="log-blue">👑 [BULLY] Node 2 | Reconhece Node 4</span><br>
+                    <span class="log-blue">👑 [BULLY] Node 3 | Reconhece Node 4</span>
+                </div>
+            </div>
+        </div>
+        <div class="slide-number">08 / 12</div>
+        <div class="progress-bar" style="width:66.66%"></div>
+    </div>
+
+    <!-- SLIDE 9: TOLERÂNCIA A FALHAS -->
+    <div class="slide" id="slide-9">
+        <span class="tag tag-orange">Tolerância a Falhas</span>
+        <h2>Detecção e Recuperação Automática</h2>
+        <div class="two-col" style="margin-top:20px;">
+            <div>
+                <h3 style="margin-bottom:16px;">Mecanismo de Detecção</h3>
+                <div class="card" style="margin-bottom:16px;">
+                    <div class="icon"><i class="fas fa-heartbeat"></i></div>
+                    <h3>Heartbeat Loop</h3>
+                    <p>Thread dedicada pinga o líder a cada 2s. Timeout de 2s na RPC. Se falha → <code>report_leader_failure()</code>.</p>
+                </div>
+                <div class="card card-green">
+                    <div class="icon"><i class="fas fa-sync-alt"></i></div>
+                    <h3>Recuperação</h3>
+                    <p>Após detectar falha, dispara <code>run_election()</code>. O maior ID vivo assume. COORDINATOR é enviado com retry (3x).</p>
+                </div>
+            </div>
+            <div>
+                <h3 style="margin-bottom:16px;">Demonstração ao Vivo</h3>
+                <div class="code-block" style="margin-bottom:16px;">
+                    <span class="cm"># Terminal B — simula falha</span><br>
+                    $ docker stop node5<br><br>
+                    <span class="cm"># Nos logs (2-3 segundos depois):</span><br>
+                    <span class="str">👑 Node 3 | Falha do lider detectada!</span><br>
+                    <span class="str">👑 Node 4 | SOU O NOVO LIDER!</span>
+                </div>
+                <div class="card card-orange" style="padding:16px 20px;">
+                    <p><i class="fas fa-stopwatch" style="color:var(--accent-orange);margin-right:8px;"></i><strong>Tempo de recuperação:</strong> ~4 segundos (2s timeout + 2s eleição)</p>
+                </div>
+            </div>
+        </div>
+        <div class="slide-number">09 / 12</div>
+        <div class="progress-bar" style="width:75%"></div>
+    </div>
+
+    <!-- SLIDE 10: DOCKER -->
+    <div class="slide" id="slide-10">
+        <span class="tag tag-blue">Infraestrutura</span>
+        <h2>Cluster Docker Compose</h2>
+        <div class="two-col" style="margin-top:20px;">
+            <div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:20px;">
+                    <div class="card" style="padding:18px; text-align:center;">
+                        <div class="highlight-number">5</div>
+                        <p style="font-size:13px;">Contêineres</p>
+                    </div>
+                    <div class="card card-green" style="padding:18px; text-align:center;">
+                        <div class="highlight-number" style="background:linear-gradient(135deg,var(--accent-green),var(--accent));">1</div>
+                        <p style="font-size:13px;">Rede Bridge</p>
+                    </div>
+                    <div class="card card-purple" style="padding:18px; text-align:center;">
+                        <div class="highlight-number" style="background:linear-gradient(135deg,var(--accent-purple),var(--accent));">50051</div>
+                        <p style="font-size:13px;">Porta gRPC</p>
+                    </div>
+                    <div class="card card-orange" style="padding:18px; text-align:center;">
+                        <div class="highlight-number" style="background:linear-gradient(135deg,var(--accent-orange),var(--accent-red));">0</div>
+                        <p style="font-size:13px;">Simulação</p>
+                    </div>
+                </div>
+            </div>
+            <div>
+                <div class="code-block">
+                    <span class="cm"># docker-compose.yml (resumo)</span><br>
+                    <span class="kw">services</span>:<br>
+                    &nbsp;&nbsp;<span class="fn">node1</span>...<span class="fn">node5</span>:<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;build: .<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;environment:<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;- NODE_ID=N<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;- PEERS=node1:50051,...<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;- CS_INTERVAL=5<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;networks: [cluster]<br><br>
+                    <span class="kw">networks</span>:<br>
+                    &nbsp;&nbsp;<span class="fn">cluster</span>:<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;driver: bridge
+                </div>
+                <div style="margin-top:14px;">
+                    <div class="badge-row">
+                        <div class="badge"><i class="fab fa-python"></i> python:3.11-slim</div>
+                        <div class="badge"><i class="fas fa-bolt"></i> PYTHONUNBUFFERED=1</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="slide-number">10 / 12</div>
+        <div class="progress-bar" style="width:83.33%"></div>
+    </div>
+
+    <!-- SLIDE 11: RESULTADOS -->
+    <div class="slide" id="slide-11">
+        <span class="tag tag-green">Resultados</span>
+        <h2>Logs Didáticos — Prova de Funcionamento</h2>
+        <div class="two-col" style="margin-top:16px;">
+            <div>
+                <div class="log-block" style="margin-bottom:16px; font-size:11.5px;">
+                    <span class="log-green">🟢 [LAMPORT] Node 1 | Clock: 26 -> 94</span><br>
+                    <span class="log-dim">&nbsp;&nbsp;&nbsp;(via msg de Node 5)</span><br><br>
+                    <span class="log-yellow">🟡 [RICART] Node 4 | Solicitando CS</span><br>
+                    <span class="log-dim">&nbsp;&nbsp;&nbsp;(Lamport: 88, aguardando 4 REPLYs)</span><br><br>
+                    <span class="log-red">🔴 [RICART] Node 4 | Pedido do Node 5</span><br>
+                    <span class="log-red">&nbsp;&nbsp;&nbsp;ADIADO (ts=88,id=4) < (ts=104,id=5)</span><br><br>
+                    <span class="log-green">✅ [RICART] Node 4 | Entrou na CS!</span><br>
+                    <span class="log-dim">&nbsp;&nbsp;&nbsp;>>> TRABALHANDO por 2.9s...</span><br><br>
+                    <span class="log-blue">🔵 [RICART] Node 4 | Saiu da CS</span><br>
+                    <span class="log-dim">&nbsp;&nbsp;&nbsp;REPLY adiado para: [2, 3, 5]</span>
+                </div>
+            </div>
+            <div>
+                <h3 style="margin-bottom:12px;">Legenda dos Logs</h3>
+                <table class="emoji-table">
+                    <tr><td>🟢</td><td>[LAMPORT]</td><td>Salto do relógio</td></tr>
+                    <tr><td>🟡</td><td>[RICART]</td><td>Solicitando CS</td></tr>
+                    <tr><td>🔴</td><td>[RICART]</td><td>Pedido adiado</td></tr>
+                    <tr><td>✅</td><td>[RICART]</td><td>Entrou na CS</td></tr>
+                    <tr><td>🔵</td><td>[RICART]</td><td>Saiu + REPLY enviado</td></tr>
+                    <tr><td>👑</td><td>[BULLY]</td><td>Eleição / líder</td></tr>
+                    <tr><td>📡</td><td>[NET]</td><td>Peer descoberto</td></tr>
+                </table>
+                <div class="card" style="margin-top:14px; padding:14px 18px;">
+                    <p><i class="fas fa-palette" style="color:var(--accent);margin-right:8px;"></i>Cada nó tem cor ANSI própria no terminal para fácil identificação visual.</p>
+                </div>
+            </div>
+        </div>
+        <div class="slide-number">11 / 12</div>
+        <div class="progress-bar" style="width:91.66%"></div>
+    </div>
+
+    <!-- SLIDE 12: CONCLUSÃO -->
+    <div class="slide" id="slide-12">
+        <span class="tag tag-blue">Conclusão</span>
+        <h2>Sistema Distribuído com Comunicação Real</h2>
+        <div class="divider"></div>
+        <div class="two-col" style="margin-top:10px;">
+            <div>
+                <ul style="margin-bottom:24px;">
+                    <li><strong>Integração orgânica:</strong> Lamport alimenta o Ricart-Agrawala (ordenação total).</li>
+                    <li><strong>Assincronismo correto:</strong> REQUEST/REPLY separados eliminam deadlock do ThreadPool.</li>
+                    <li><strong>Tolerância a falhas:</strong> Bully detecta e recupera liderança em ~4s.</li>
+                    <li><strong>Comunicação real:</strong> gRPC/TCP entre contêineres Docker isolados.</li>
+                    <li><strong>Thread-safe:</strong> Locks em cada módulo, transição atômica WANTED→HELD.</li>
+                </ul>
+                <div class="badge-row">
+                    <div class="badge"><i class="fab fa-python"></i> Python 3.11</div>
+                    <div class="badge"><i class="fas fa-server"></i> gRPC</div>
+                    <div class="badge"><i class="fab fa-docker"></i> Docker</div>
+                </div>
+            </div>
+            <div style="display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center;">
+                <div style="font-size:64px; margin-bottom:16px;">🎓</div>
+                <h3 style="font-size:22px; margin-bottom:8px;">Lucas Bellusci D'Andréa</h3>
+                <p style="color:var(--text-muted); font-size:15px;">RA 206009</p>
+                <p style="color:var(--text-muted); font-size:14px; margin-top:4px;">MC714 — Sistemas Distribuídos</p>
+                <p style="color:var(--text-muted); font-size:14px;">Unicamp — 1S/2026</p>
+                <div style="margin-top:24px; padding:14px 24px; background:var(--bg-card); border:1px solid var(--border); border-radius:10px;">
+                    <p style="font-size:14px; color:var(--text-secondary);"><i class="fas fa-question-circle" style="color:var(--accent);margin-right:8px;"></i>Perguntas?</p>
+                </div>
+            </div>
+        </div>
+        <div class="slide-number">12 / 12</div>
+        <div class="progress-bar" style="width:100%"></div>
+    </div>
+
+</div>
+
+<div class="nav-hint">
+    <i class="fas fa-arrow-left"></i> &nbsp; Teclas ← → ou clique para navegar &nbsp; <i class="fas fa-arrow-right"></i>
+</div>
+
+<script>
+    const slides = document.querySelectorAll('.slide');
+    let current = 0;
+
+    function showSlide(n) {
+        slides[current].classList.remove('active');
+        current = (n + slides.length) % slides.length;
+        slides[current].classList.add('active');
+    }
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowRight' || e.key === ' ') showSlide(current + 1);
+        if (e.key === 'ArrowLeft') showSlide(current - 1);
+    });
+
+    document.addEventListener('click', (e) => {
+        const x = e.clientX;
+        if (x > window.innerWidth / 2) showSlide(current + 1);
+        else showSlide(current - 1);
+    });
+</script>
+
+</body>
+</html>
