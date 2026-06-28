@@ -39,6 +39,14 @@
             min-height: 100vh;
         }
 
+        .center-content {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: flex-start;
+            flex: 1;
+        }
+
         .deck {
             position: relative;
             width: 1280px;
@@ -296,18 +304,6 @@
 
         .badge i { color: var(--accent); }
 
-        .nav-hint {
-            position: fixed;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            font-size: 12px;
-            color: var(--text-muted);
-            background: rgba(26,26,46,0.9);
-            padding: 8px 20px;
-            border-radius: 20px;
-            border: 1px solid var(--border);
-        }
 
         .divider {
             width: 60px;
@@ -358,6 +354,52 @@
             -webkit-text-fill-color: transparent;
             background-clip: text;
         }
+
+        .cover-meta {
+            display: flex;
+            gap: 32px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .author-list {
+            display: flex;
+            gap: 28px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .author {
+            min-width: 190px;
+        }
+
+        .author-name {
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .author-ra {
+            font-size: 14px;
+            color: var(--text-muted);
+            margin-top: 3px;
+        }
+
+        .meta-divider {
+            width: 1px;
+            height: 42px;
+            background: var(--border);
+        }
+
+        .course-meta p {
+            font-size: 14px;
+            color: var(--text-muted);
+            line-height: 1.6;
+        }
+
+        .conclusion-content {
+            max-width: 820px;
+            margin-top: 10px;
+        }
     </style>
 </head>
 <body>
@@ -366,20 +408,26 @@
 
     <!-- SLIDE 1: CAPA -->
     <div class="slide active" id="slide-1">
-        <div style="flex:1; display:flex; flex-direction:column; justify-content:center;">
+        <div class="center-content">
             <span class="tag tag-blue">MC714 — Sistemas Distribuídos</span>
             <h1 class="cover-title">Trabalho 2:<br><span class="cover-accent">Sistema Distribuído com<br>Comunicação Real</span></h1>
             <div class="divider"></div>
             <p class="subtitle" style="margin-bottom:30px;">Integração de Relógio de Lamport, Ricart-Agrawala e Bully<br>sobre gRPC + Docker Compose</p>
-            <div style="display:flex; gap:40px; align-items:center;">
-                <div>
-                    <p style="font-size:16px; font-weight:600;">Lucas Bellusci D'Andréa</p>
-                    <p style="font-size:14px; color:var(--text-muted);">RA 206009</p>
+            <div class="cover-meta">
+                <div class="author-list">
+                    <div class="author">
+                        <p class="author-name">Lucas Bellusci D'Andréa</p>
+                        <p class="author-ra">RA 206009</p>
+                    </div>
+                    <div class="author">
+                        <p class="author-name">Lucas Cardoso</p>
+                        <p class="author-ra">RA 246125</p>
+                    </div>
                 </div>
-                <div style="width:1px; height:36px; background:var(--border);"></div>
-                <div>
-                    <p style="font-size:14px; color:var(--text-muted);">Unicamp — IC</p>
-                    <p style="font-size:14px; color:var(--text-muted);">1º Semestre 2026</p>
+                <div class="meta-divider"></div>
+                <div class="course-meta">
+                    <p>Unicamp — IC</p>
+                    <p>1º Semestre 2026</p>
                 </div>
             </div>
         </div>
@@ -798,30 +846,18 @@
         <span class="tag tag-blue">Conclusão</span>
         <h2>Sistema Distribuído com Comunicação Real</h2>
         <div class="divider"></div>
-        <div class="two-col" style="margin-top:10px;">
-            <div>
-                <ul style="margin-bottom:24px;">
-                    <li><strong>Integração orgânica:</strong> Lamport alimenta o Ricart-Agrawala (ordenação total).</li>
-                    <li><strong>Assincronismo correto:</strong> REQUEST/REPLY separados eliminam deadlock do ThreadPool.</li>
-                    <li><strong>Tolerância a falhas:</strong> Bully detecta e recupera liderança em ~4s.</li>
-                    <li><strong>Comunicação real:</strong> gRPC/TCP entre contêineres Docker isolados.</li>
-                    <li><strong>Thread-safe:</strong> Locks em cada módulo, transição atômica WANTED→HELD.</li>
-                </ul>
-                <div class="badge-row">
-                    <div class="badge"><i class="fab fa-python"></i> Python 3.11</div>
-                    <div class="badge"><i class="fas fa-server"></i> gRPC</div>
-                    <div class="badge"><i class="fab fa-docker"></i> Docker</div>
-                </div>
-            </div>
-            <div style="display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center;">
-                <div style="font-size:64px; margin-bottom:16px;">🎓</div>
-                <h3 style="font-size:22px; margin-bottom:8px;">Lucas Bellusci D'Andréa</h3>
-                <p style="color:var(--text-muted); font-size:15px;">RA 206009</p>
-                <p style="color:var(--text-muted); font-size:14px; margin-top:4px;">MC714 — Sistemas Distribuídos</p>
-                <p style="color:var(--text-muted); font-size:14px;">Unicamp — 1S/2026</p>
-                <div style="margin-top:24px; padding:14px 24px; background:var(--bg-card); border:1px solid var(--border); border-radius:10px;">
-                    <p style="font-size:14px; color:var(--text-secondary);"><i class="fas fa-question-circle" style="color:var(--accent);margin-right:8px;"></i>Perguntas?</p>
-                </div>
+        <div class="conclusion-content">
+            <ul style="margin-bottom:24px;">
+                <li><strong>Integração orgânica:</strong> Lamport alimenta o Ricart-Agrawala (ordenação total).</li>
+                <li><strong>Assincronismo correto:</strong> REQUEST/REPLY separados eliminam deadlock do ThreadPool.</li>
+                <li><strong>Tolerância a falhas:</strong> Bully detecta e recupera liderança em ~4s.</li>
+                <li><strong>Comunicação real:</strong> gRPC/TCP entre contêineres Docker isolados.</li>
+                <li><strong>Thread-safe:</strong> Locks em cada módulo, transição atômica WANTED→HELD.</li>
+            </ul>
+            <div class="badge-row">
+                <div class="badge"><i class="fab fa-python"></i> Python 3.11</div>
+                <div class="badge"><i class="fas fa-server"></i> gRPC</div>
+                <div class="badge"><i class="fab fa-docker"></i> Docker</div>
             </div>
         </div>
         <div class="slide-number">12 / 12</div>
@@ -830,9 +866,6 @@
 
 </div>
 
-<div class="nav-hint">
-    <i class="fas fa-arrow-left"></i> &nbsp; Teclas ← → ou clique para navegar &nbsp; <i class="fas fa-arrow-right"></i>
-</div>
 
 <script>
     const slides = document.querySelectorAll('.slide');

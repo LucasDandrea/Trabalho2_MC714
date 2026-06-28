@@ -1,71 +1,71 @@
 # Roteiro de Apresentação Completa — Trabalho 2 MC714
 
-> **Como usar este roteiro:** ele intercala os **12 slides** (`apresentacao_projeto.html`) com o **hands-on no terminal** (`ROTEIRO_VIDEO.md`).
-> Cada bloco diz **(A) em qual slide você está**, **(B) o que falar** e **(C) o que mostrar/apontar no terminal e quando**.
-> Marcações: 🖥️ = vá para o terminal · 📊 = vá para os slides · 🔴 AO VIVO = ação executada na hora da gravação.
+> **Como usar:** este roteiro intercala os **12 slides** (`apresentacao_projeto.html`) com o **hands-on no terminal** (`ROTEIRO_VIDEO.md`).
+> Os blocos **"🎙️ Fala"** são escritos para serem **lidos em voz alta de forma corrida** — linguagem natural, como se você estivesse explicando para a turma, não recitando o slide.
+> Marcações: 🖥️ = vá para o terminal · 📊 = slides · 🔴 AO VIVO = ação executada na hora.
+> Texto entre *[colchetes em itálico]* é **indicação de cena**, não para ler.
 
 ---
 
 ## Preparação (antes de gravar)
 
-1. **Slides** abertos em tela cheia no navegador (`apresentacao_projeto.html`). Use ← → para navegar.
+1. **Slides** em tela cheia (`apresentacao_projeto.html`), navegação por ← →.
 2. **Dois terminais** lado a lado, fonte grande:
    - **Terminal A** (principal): `docker compose`.
    - **Terminal B** (falha): `docker stop`/`start`.
 3. Cluster parado: `docker compose down`.
-4. Tenha o cronômetro à vista. Meta: ~10 min.
+4. Cronômetro à vista. Meta: ~10 min.
 
-> **Estrutura geral:** explico o algoritmo no slide → mostro ele acontecendo no terminal. Os slides de teoria (1–8) vão antes do `up`; o `up` roda enquanto explico Lamport/Ricart; o `docker stop` ao vivo cai no slide 9; slides 10–12 fecham com a prova nos logs.
+> **Lógica da apresentação:** explico cada algoritmo no slide e, logo em seguida, mostro ele *acontecendo de verdade* no terminal. A teoria (slides 1–8) vem antes do `up`; o cluster sobe enquanto narro Lamport e Ricart; o `docker stop` ao vivo cai no slide 9; os slides 10–12 fecham amarrando tudo.
 
 ---
 
 ## BLOCO 1 — Abertura e visão geral (0:00 – 1:30)
 
 ### 📊 Slide 1 (Capa)
-**Falar:**
-> "Este é o Trabalho 2 de MC714, Sistemas Distribuídos. Vou demonstrar um cluster de 5 nós que se comunicam por gRPC real, integrando três algoritmos clássicos: Relógio de Lamport, Exclusão Mútua de Ricart-Agrawala e Eleição de Líder com Bully."
+🎙️ **Fala:**
+> "Olá. Esse é o meu Trabalho 2 de MC714, Sistemas Distribuídos. A proposta aqui não foi implementar três algoritmos soltos e mostrar que cada um roda — foi montar **um sistema só**, com cinco nós conversando por rede de verdade, em que o Relógio de Lamport, a exclusão mútua de Ricart-Agrawala e a eleição de líder do Bully trabalham juntos e dependem uns dos outros. Eu vou explicar a ideia de cada um e, em seguida, mostrar tudo funcionando ao vivo num cluster Docker."
 
 ### 📊 Slide 2 (Visão Geral — 3 algoritmos)
-**Falar:**
-> "A ideia central é que os três algoritmos **não vivem isolados**: o Lamport é a 'cola' — ele carimba toda mensagem; o Ricart-Agrawala usa esse carimbo `(ts, id)` como critério de prioridade; e o Bully garante tolerância a falhas reelegendo o líder."
+🎙️ **Fala:**
+> "Antes de entrar no código, quero deixar clara a tese do trabalho, porque é o que costura tudo. Esses três algoritmos não são independentes — eles se alimentam. O **Lamport** é a base: ele dá um carimbo de tempo lógico para toda mensagem que trafega na rede. O **Ricart-Agrawala** pega exatamente esse carimbo e usa o par tempo-mais-identificador para decidir quem tem prioridade de entrar na seção crítica — ou seja, ele só funciona porque o Lamport existe embaixo. E o **Bully** entra por cima: é ele que garante que, se o líder morrer, o sistema se reorganiza sozinho. Então a leitura correta é: Lamport ordena, Ricart-Agrawala coordena, e o Bully protege contra falha."
 
 ### 📊 Slide 3 (Stack Tecnológica)
-**Falar:**
-> "A stack é Python pela legibilidade dos algoritmos, gRPC sobre Protocol Buffers para comunicação **real via TCP**, e Docker Compose para isolar cada nó. Ponto importante do enunciado: **proibido simular** mensagens via arquivos ou memória compartilhada — aqui é tudo gRPC."
+🎙️ **Fala:**
+> "Sobre as escolhas técnicas. Usei Python porque deixa a lógica dos algoritmos limpa e legível, que é o que importa num trabalho conceitual desses. Para a comunicação, usei **gRPC sobre Protocol Buffers** — e isso é proposital: o enunciado exige troca de mensagens **real**, então cada mensagem aqui é uma chamada de rede TCP de verdade, com contrato tipado no arquivo `.proto`. Nada de simular mensagem escrevendo em arquivo, em pipe ou em memória compartilhada — isso seria eliminatório. E para isolar de fato os nós, cada um roda no seu próprio contêiner Docker, com IP próprio, numa rede dedicada."
 
-🖥️ **(opcional, transição rápida ao Terminal A):**
+🖥️ *[transição rápida e opcional ao Terminal A, só pra dar credibilidade visual]*
 ```bash
 ls
 cat docker-compose.yml
 ```
-> "Cada um dos 5 serviços é um contêiner independente, com IP próprio, escutando gRPC na porta 50051 de uma rede bridge."
+> "Aqui dá pra ver: são cinco serviços, cinco processos independentes, cada um escutando gRPC na porta 50051. Não há um processo mestre orquestrando — eles são pares conversando entre si."
 
 ---
 
 ## BLOCO 2 — Teoria dos algoritmos (1:30 – 3:30)
 
-> Mantenha-se nos slides. Esses 4 slides preparam o espectador para entender os logs depois.
+> Fique nos slides. Aqui você "ensina" o espectador para que, na hora dos logs, ele já entenda o que está vendo.
 
 ### 📊 Slide 4 (Lamport)
-**Falar:**
-> "O relógio de Lamport tem duas operações. `tick()` incrementa o clock local **antes de enviar** qualquer mensagem. `update(T)` é chamado **ao receber**, e aplica `max(local, T) + 1` — é isso que garante que o receptor nunca fique causalmente atrás do emissor. Tudo protegido por lock, mas o log sai **fora** do lock para não segurar I/O."
+🎙️ **Fala:**
+> "Começando pelo Relógio de Lamport. O problema que ele resolve é simples de enunciar e profundo na prática: num sistema distribuído **não existe relógio físico confiável e sincronizado** entre as máquinas. Então a gente abandona a ideia de tempo real e usa um contador lógico que respeita só uma coisa — a **causalidade**. A implementação tem duas operações. A primeira é o `tick`: sempre que eu vou **enviar** uma mensagem, eu incremento meu contador antes. A segunda é o `update`: quando eu **recebo** uma mensagem, eu pego o maior valor entre o meu relógio e o que veio na mensagem, e somo um. Esse `max` mais um é a alma do algoritmo, porque ele garante que se um evento A causou o evento B, então o tempo de A é sempre menor que o de B. O receptor **nunca** consegue ficar 'atrás' de quem mandou a mensagem. Um detalhe de implementação que eu cuidei: o contador é protegido por um lock, mas eu emito o log **fora** do lock, pra não segurar a região crítica fazendo escrita de tela."
 
 ### 📊 Slide 5 (Ricart-Agrawala)
-**Falar:**
-> "No Ricart-Agrawala, quando um nó quer a Seção Crítica ele pede a todos. A regra de quem adia quem é: 'eu seguro o seu REPLY se eu estou na CS, ou se eu também quero e meu par `(ts, id)` é menor que o seu'. Timestamp menor = prioridade maior, e o `id` desempata. Isso dá uma **ordem total determinística**."
-> "Um nó passa por RELEASED → WANTED (esperando N-1 REPLYs) → HELD (na CS) → e ao sair libera os REPLYs adiados."
+🎙️ **Fala:**
+> "Com o Lamport pronto, dá pra construir a exclusão mútua. O objetivo do Ricart-Agrawala é clássico: garantir que **só um nó por vez** entre na seção crítica, mas **sem nenhum coordenador central** — porque um coordenador central seria um ponto único de falha, justamente o que a gente quer evitar. O mecanismo é o seguinte: quando eu quero entrar, eu peço permissão a todos os outros e só entro quando os N menos um responderem. A pergunta interessante é: quando é que eu, ao receber um pedido de outro nó, **adio** a resposta dele em vez de liberar na hora? A regra é: eu seguro o REPLY se eu já estou dentro da seção crítica, ou se eu também quero entrar e o meu par tempo-identificador é menor que o dele. Ou seja, **timestamp menor ganha**, e quando dá empate de timestamp o identificador menor desempata. Isso transforma uma ordem que seria parcial numa **ordem total determinística** — todo mundo concorda na mesma fila, sem precisar conversar sobre isso."
 
 ### 📊 Slide 6 (Comunicação gRPC — Fire-and-Forget)
-**Falar:**
-> "São 5 RPCs unárias. O detalhe crítico: se o `RequestAccess` **bloqueasse** esperando a CS liberar, o ThreadPool do gRPC esgotaria e daria deadlock. Por isso REQUEST e REPLY são RPCs **separadas**: o handler registra o pedido, devolve Ack na hora, e quando o nó sai da CS dispara os REPLYs proativamente."
+🎙️ **Fala:**
+> "Agora um ponto que eu considero o mais sutil do trabalho, e que muita implementação ingênua erra. O gRPC atende cada chamada numa thread de um pool. Se o meu `RequestAccess` ficasse **bloqueado** esperando a seção crítica liberar para só então responder, eu estaria segurando uma thread do pool durante todo o tempo da seção crítica. Com vários nós pedindo ao mesmo tempo, o pool esgota e o sistema trava — um **deadlock distribuído**. A solução que eu adotei é desacoplar: REQUEST e REPLY são duas chamadas **separadas**. Quando chega um pedido, o handler só registra esse pedido numa estrutura e devolve um Ack imediato, liberando a thread na hora. O REPLY de verdade só é enviado depois, quando eu saio da seção crítica — e aí eu disparo os REPLYs adiados de forma **proativa**, numa thread minha. Em uma frase: ninguém fica esperando pendurado numa chamada de rede."
 
 ### 📊 Slide 7 (Concorrência / Thread-Safety)
-**Falar:**
-> "Como o gRPC usa um pool de 20 workers, várias threads mexem no estado ao mesmo tempo. Cada módulo tem seu lock: o Lamport no contador, o Ricart-Agrawala cobrindo estado + fila de adiados, e o Bully cobrindo `leader_id` e a flag de eleição. A transição WANTED→HELD é atômica. Resultado: zero deadlock, zero race condition."
+🎙️ **Fala:**
+> "E como tudo isso roda concorrente, eu precisei tratar a sincronização com cuidado. O pool do gRPC tem vinte workers, então é perfeitamente possível duas mensagens chegarem ao mesmo tempo e quererem mexer no mesmo estado. Cada módulo tem o seu próprio lock protegendo o que é dele: o Lamport protege o contador, o Ricart-Agrawala protege de uma vez o estado, o timestamp do pedido e a fila de adiados, e o Bully protege quem é o líder e a flag de eleição em andamento. O ponto fino é a transição de 'querendo' para 'dentro da seção crítica': ela é **atômica**, acontece toda dentro de um lock, justamente pra não existir aquela janela onde eu acho que já posso entrar mas o estado ainda não foi atualizado. O resultado disso é que eu rodei o sistema repetidas vezes sem nenhum deadlock e sem nenhuma condição de corrida."
 
 ### 📊 Slide 8 (Bully)
-**Falar:**
-> "O Bully: quando o heartbeat do líder falha, o nó manda ELECTION para todos de ID **maior**. Se alguém responde, ele recua ('ok, você assume'). Se ninguém responde, ele se declara líder e anuncia COORDINATOR. Um detalhe elegante da nossa implementação: o **próprio Ack da RPC já serve como o 'OK'** do Bully — não precisamos de mensagem extra."
+🎙️ **Fala:**
+> "Fechando a teoria, o algoritmo de eleição, o Bully. O nome já diz: 'ganha o mais forte', e aqui força é o **maior identificador**. A dinâmica é: quando eu percebo, por heartbeat, que o líder caiu, eu mando uma mensagem de ELECTION para todos os nós com identificador maior que o meu. Se algum deles responde, eu recuo — penso 'tem gente mais forte viva, deixo com eles'. Se **ninguém** maior responde, então o mais forte vivo sou eu, e eu me anuncio como líder mandando COORDINATOR pra todo mundo. E aqui tem uma decisão de implementação que eu gosto de destacar, porque mostra economia: eu **não criei** uma mensagem separada de 'OK'. O próprio sucesso da chamada gRPC — o Ack — já me diz que o nó maior está vivo e assumiu. Então eu reaproveito a semântica do protocolo em vez de inventar tráfego extra."
 
 ---
 
@@ -75,118 +75,121 @@ cat docker-compose.yml
 ```bash
 docker compose up --build
 ```
+> *[Deixe os slides na lateral ou volte ao slide 8 — a teoria de Bully casa com o que vai aparecer.]*
 
-> Deixe os slides na lateral ou volte ao slide 8 (Bully) enquanto os logs sobem — a teoria de Bully casa com o que aparece agora.
+🎙️ **Fala** *[enquanto os logs sobem]*:
+> "Pronto, estou subindo os cinco nós ao mesmo tempo. Reparem que ninguém nasce sabendo quem são os vizinhos — então a primeira coisa que cada nó faz é uma fase de **descoberta**."
 
-**Apontar nos logs, na ordem em que aparecem:**
+**1. Discovery** — aponte para `📡 [NET]`:
+> "São essas linhas de NET. Cada nó fica pingando os outros até confirmar que todos estão de pé — vejam o contador subindo, 'um de quatro prontos', 'dois de quatro', até 'todos os quatro peers prontos'. Só depois disso ele começa a participar de verdade."
 
-1. **Discovery (wait-for-peers)** — `📡 [NET]`:
-   > "Cada nó descobre os vizinhos um a um: `Peer 4 respondeu! (3/4 prontos)` … até `Todos os 4 peers prontos!`."
+**2. Eleição Bully inicial** — aponte para `👑 [BULLY]`:
+> "Assim que ficam prontos, eles já disparam uma eleição pra decidir o líder. E acontece exatamente o que a teoria previu: os nós menores mandam ELECTION pros maiores, e o Node 5, que tem o maior identificador, não encontra ninguém acima dele. Olhem a linha dele: **'sou o novo líder, anunciando COORDINATOR para um, dois, três e quatro'**."
 
-2. **Eleição Bully inicial** — `👑 [BULLY]`:
-   > "Os nós menores mandam ELECTION para os maiores. O Node 5 tem o maior ID, ninguém acima dele responde, então: **`SOU O NOVO LIDER! Anunciando COORDINATOR a [1, 2, 3, 4]`**."
+**3. COORDINATOR aceito:**
+> "E todos os outros reconhecem: 'reconhece Node 5 como o novo líder'. Em poucos décimos de segundo o cluster convergiu para um líder, sem nenhuma configuração manual."
 
-3. **COORDINATOR aceito:**
-   > "E todos reconhecem: `👑 Node X | Reconhece Node 5 como o novo LIDER`."
-
-4. **⚠️ Explicar a redundância de eleições (importante, antecipe a dúvida):**
-   > "Reparem que o Node 5 se declara líder **mais de uma vez**. Isso é esperado: como cada nó dispara uma eleição de validação **ao entrar** no cluster, e eles entram escalonados, a eleição roda algumas vezes. É **idempotente** — converge sempre para o maior ID vivo. Não é erro."
+**4. ⚠️ Antecipando a dúvida da redundância** *[fale isso ANTES que percebam, mostra domínio]*:
+> "E eu quero me adiantar a uma coisa que vocês vão notar: o Node 5 se declara líder **mais de uma vez** nos logs. Isso é proposital e é correto. Como cada nó roda uma eleição de validação no momento em que entra no cluster, e eles entram com pequenos atrasos diferentes, a eleição acaba rodando algumas vezes nesses primeiros segundos. O importante é que ela é **idempotente**: não importa quantas vezes rode, o resultado converge sempre pro mesmo nó, o de maior identificador vivo. Então não é instabilidade, é o algoritmo se confirmando."
 
 ---
 
 ## BLOCO 4 — DEMO: Relógio de Lamport ao vivo (5:00 – 5:45)
 
-### 📊 Volte ao Slide 4 (Lamport) por uns segundos, depois 🖥️ Terminal A.
+### 📊 Volte ao Slide 4 por uns segundos, depois 🖥️ Terminal A.
 
-**Falar + apontar `🟢 [LAMPORT]`:**
-> "Em **toda** troca de mensagem o relógio evolui. Vejam estes saltos quando o Node 2 termina de inicializar com clock já alto e 'puxa' os outros:"
+🎙️ **Fala** — aponte para `🟢 [LAMPORT]`:
+> "Agora repare numa coisa que está acontecendo o tempo todo, em segundo plano: o relógio de Lamport evoluindo a cada mensagem. Essas linhas verdes são os saltos do contador. E eu quero mostrar um caso bem ilustrativo: quando o Node 2 termina de inicializar, ele já está com o relógio adiantado, e ao falar com os outros ele 'puxa' todo mundo pra frente. Vejam:"
 
 - `Node 1 | Clock atualizado: 8 -> 16 (via msg de Node 2)`
 - `Node 3 | Clock atualizado: 8 -> 17 (via msg de Node 2)`
 - `Node 5 | Clock atualizado: 10 -> 19 (via msg de Node 2)`
 
-> "O receptor salta para `max(local, recebido) + 1`. Ele **nunca fica atrás** do emissor — é a causalidade de Lamport na prática."
+> "O Node 1 estava em oito e saltou direto pra dezesseis ao receber a mensagem. Ele não foi de oito pra nove — ele pulou pro máximo entre o dele e o que recebeu, mais um. É a causalidade na prática: o receptor se reposiciona pra nunca parecer que aconteceu antes de quem mandou a mensagem."
 
 ---
 
 ## BLOCO 5 — DEMO: Exclusão mútua Ricart-Agrawala (5:45 – 7:30)
 
-> **Este é o coração da demonstração.** Vá devagar aqui.
+> **Coração da apresentação.** Vá devagar, é aqui que você prova que entende mesmo.
 
-### 📊 Tenha o Slide 5 (Ricart) ou Slide 11 (logs) à mão; 🖥️ foco no Terminal A.
+### 📊 Tenha o Slide 5 ou o Slide 11 à mão; 🖥️ foco no Terminal A.
 
-**1. REQUEST** — `🟡 [RICART]`:
-> "O Node 1 quer a Seção Crítica: `Solicitando Secao Critica... (Lamport: 78, aguardando 4 REPLYs)`. Ele manda REQUEST aos 4 vizinhos."
+🎙️ **Fala** — aponte conforme cada linha aparece:
 
-**2. Concessão imediata** — `🟢 [RICART]`:
-> "Como ninguém mais quer, todos concedem na hora: `Concedendo permissao ao Node 1 imediatamente (estado=RELEASED)`. Node 1 entra: `✅ Entrou na Secao Critica! (Lamport: 87)`."
+**1. REQUEST** (`🟡 [RICART]`):
+> "Agora vamos ver a exclusão mútua em ação, que é a parte mais bonita. O Node 1 resolve entrar na seção crítica — essa linha amarela: 'solicitando seção crítica, Lamport setenta e oito, aguardando quatro REPLYs'. Ele mandou o pedido pros quatro vizinhos e agora espera a permissão de todos."
 
-**3. ADIAMENTO (o momento mais importante)** — `🔴 [RICART]`:
-> "Agora vem o ouro. Enquanto o Node 1 trabalha, o Node 5 e o Node 2 também pedem a CS. Olhem o que o Node 1 faz:"
+**2. Concessão imediata** (`🟢 [RICART]`):
+> "Como nesse instante ninguém mais quer entrar, todos liberam na hora — 'concedendo permissão ao Node 1 imediatamente, estado RELEASED'. Ele junta as quatro permissões e entra: 'entrou na seção crítica'."
+
+**3. O ADIAMENTO — o momento-chave** (`🔴 [RICART]`):
+> "E agora vem o que eu mais queria mostrar. Enquanto o Node 1 está lá dentro trabalhando, o Node 5 e o Node 2 também resolvem pedir a seção crítica. Olhem a decisão do Node 1:"
 - `🔴 Node 1 | Pedido do Node 5 ADIADO (minha prioridade: (ts=78,id=1) < (ts=96,id=5))`
 - `🔴 Node 1 | Pedido do Node 2 ADIADO (minha prioridade: (ts=78,id=1) < (ts=100,id=2))`
-> "Timestamp menor = prioridade maior. O Node 1 segura os REPLYs. E reparem: o **próprio Node 5 já adia o Node 2**, porque `(ts=96,id=5) < (ts=100,id=2)`. A fila se ordena sozinha, sem coordenador central."
+> "Ele compara os pares: o dele é tempo setenta e oito, o do Node 5 é noventa e seis. Setenta e oito é menor, então o Node 1 tem prioridade e **segura** os REPLYs — não nega, apenas adia. E aqui tem um detalhe lindo que prova que não existe coordenador: o **próprio Node 5**, antes mesmo de entrar, já adia o Node 2, porque noventa e seis é menor que cem. Cada nó, sozinho, comparando só os timestamps, chega à mesma fila. A ordem emerge naturalmente."
 
-**4. SAÍDA + REPLY proativo** — `🔵 [RICART]`:
-> "Node 1 sai e **proativamente** libera os adiados: `Saiu da Secao Critica. Enviando REPLY adiado para: [2, 5]`. Só agora o próximo pode entrar."
+**4. SAÍDA + REPLY proativo** (`🔵 [RICART]`):
+> "Quando o Node 1 termina, ele sai e **proativamente** libera quem ele tinha adiado — essa linha azul: 'saiu da seção crítica, enviando REPLY adiado para dois e cinco'. Só nesse momento o próximo da fila consegue entrar."
 
-**5. A SEQUÊNCIA CORRETA (frase de efeito):**
-> "Acompanhem a ordem de entrada na CS: **Node 1, depois 5, depois 2, depois 3, depois 4**. Isso corresponde **exatamente** à ordem dos timestamps: 78, 96, 100, 104, 109. Em nenhum momento dois nós estão na CS ao mesmo tempo. O algoritmo serializou o acesso usando só os relógios de Lamport."
+**5. A SEQUÊNCIA — frase de fechamento** *[diga com calma, é o seu ponto alto]*:
+> "E agora juntem tudo e acompanhem a ordem em que os nós entraram na seção crítica: primeiro o um, depois o cinco, depois o dois, o três e o quatro. Compare com os timestamps deles: setenta e oito, noventa e seis, cem, cento e quatro, cento e nove. É **exatamente** a ordem crescente dos relógios de Lamport. Em nenhum instante dois nós estiveram dentro ao mesmo tempo. Ou seja: cinco processos independentes, sem nenhum chefe, conseguiram serializar perfeitamente o acesso a um recurso usando apenas relógios lógicos. Isso é o Ricart-Agrawala fazendo jus à teoria."
 
 ---
 
 ## BLOCO 6 — CLÍMAX: matando o líder e reeleição Bully (7:30 – 9:00)
 
 ### 📊 Slide 9 (Tolerância a Falhas) — abra ANTES de matar o nó.
-**Falar:**
-> "Agora a tolerância a falhas. Uma thread dedicada pinga o líder a cada 2 segundos. O líder atual é o Node 5. Vou matá-lo e vocês vão ver o sistema se recuperar sozinho em uns 4 segundos."
+🎙️ **Fala:**
+> "Até aqui mostrei o sistema funcionando no caso feliz. Mas sistema distribuído de verdade tem que sobreviver a falha — então agora eu vou **quebrar** o sistema de propósito. Cada nó tem uma thread que fica pingando o líder a cada dois segundos por heartbeat. O líder atual é o Node 5. Eu vou simplesmente matar o contêiner dele, sem aviso, como se a máquina tivesse caído, e a gente vai ver se o cluster se recupera sozinho."
 
-### 🖥️ 🔴 AO VIVO — Terminal B, execute:
+### 🖥️ 🔴 AO VIVO — Terminal B:
 ```bash
 docker stop node5
 ```
 
-**Apontar no Terminal A, conforme aparece:**
+🎙️ **Fala** — aponte no Terminal A conforme aparece:
+> "Pronto, o líder está morto. Vamos contar uns segundinhos..."
 
-1. **Detecção** — `👑 [BULLY]`:
-   > "Olhem: `Falha do lider (Node 5) detectada!` — o heartbeat estourou o timeout."
+**1. Detecção** (`👑 [BULLY]`):
+> "Aí está: 'falha do líder Node 5 detectada'. O heartbeat estourou o timeout e o nó percebeu sozinho que o chefe sumiu."
 
-2. **ELECTION:**
-   > "Quem detectou manda ELECTION aos de ID maior. O Node 4 é o maior **vivo**, então assume a eleição."
+**2. ELECTION:**
+> "Quem detectou imediatamente dispara uma eleição, mandando ELECTION pros de identificador maior. Como o Node 5 morreu, o maior **vivo** agora é o Node 4, e é ele quem assume a disputa."
 
-3. **COORDINATOR:**
-   > "`Node 4 | SOU O NOVO LIDER!` e todos reconhecem o Node 4."
+**3. COORDINATOR:**
+> "E olhem: 'Node 4, sou o novo líder', e todos os outros passam a reconhecer o quatro. O sistema reorganizou a liderança sozinho, sem ninguém intervir."
 
-4. **Sistema continua:**
-   > "E o mais importante: o Ricart-Agrawala **continua funcionando** normalmente, agora com 4 nós. O sistema se auto-recuperou sem intervenção."
+**4. Continuidade** *[esse é o argumento que fecha a robustez]*:
+> "E o detalhe que fecha o raciocínio: reparem que a exclusão mútua **não parou**. O Ricart-Agrawala segue funcionando normalmente, agora com quatro nós em vez de cinco. A morte do líder não derrubou o serviço — afinal, no Ricart-Agrawala não existe um chefe pra coordenar a seção crítica. O líder serve para outras funções; a exclusão mútua é descentralizada por natureza. Isso é tolerância a falha de verdade."
 
 ### 🖥️ (Opcional) Restaurar — Terminal B:
 ```bash
 docker start node5
 ```
-> "Se eu trago o Node 5 de volta, na próxima eleição ele reassume a liderança por ter o maior ID."
+> "E pra fechar o ciclo: se eu trouxer o Node 5 de volta, na próxima eleição ele reassume a liderança, porque continua sendo o maior identificador. O sistema acomoda tanto a saída quanto o retorno de um nó."
 
 ---
 
 ## BLOCO 7 — Infraestrutura e prova nos logs (9:00 – 9:45)
 
 ### 📊 Slide 10 (Docker Compose)
-**Falar:**
-> "Tudo isso roda em 5 contêineres numa única rede bridge, porta 50051, **zero simulação**. Cada nó recebe seu `NODE_ID` e a lista de `PEERS` por variável de ambiente."
+🎙️ **Fala:**
+> "Vale mostrar rapidamente como isso tudo está empacotado. São cinco contêineres numa única rede bridge, todos na porta 50051, e — repito, porque é requisito — **zero simulação**: cada caixinha dessas é um processo de verdade, com IP de verdade, conversando por rede. Cada nó recebe só o seu identificador e a lista de vizinhos por variável de ambiente, então o mesmo código sobe os cinco, mudando apenas a configuração."
 
-🖥️ (opcional) `cat docker-compose.yml` rápido pra evidenciar os 5 serviços.
+🖥️ *[opcional]* `cat docker-compose.yml` rápido pra evidenciar os cinco serviços.
 
 ### 📊 Slide 11 (Resultados / Logs Didáticos)
-**Falar (amarrando com o que acabaram de ver no terminal):**
-> "Esta é a legenda dos logs que vimos: 🟢 salto do relógio Lamport, 🟡 solicitando a CS, 🔴 pedido adiado, ✅ entrou na CS, 🔵 saiu e liberou REPLYs, 👑 eleição. Cada nó ainda tem cor própria no terminal para facilitar o acompanhamento visual."
+🎙️ **Fala** *[amarrando com o que acabaram de ver]*:
+> "E essa é a legenda dos logs que a gente acompanhou ao vivo — eu fiz questão de instrumentar cada evento com um emoji e uma cor por nó, justamente pra ficar didático na hora de demonstrar. Verde é salto do relógio de Lamport; amarelo é alguém pedindo a seção crítica; vermelho é um pedido sendo adiado por prioridade; o check verde é entrada na seção crítica; o azul é a saída liberando os adiados; e a coroa é a eleição. Tudo que eu narrei está nessas marcações, em tempo real."
 
 ---
 
 ## BLOCO 8 — Conclusão (9:45 – 10:00)
 
 ### 📊 Slide 12 (Conclusão)
-**Falar:**
-> "Resumindo o que demonstrei: o Lamport ordena causalmente toda mensagem e **alimenta** o Ricart-Agrawala, que garante exclusão mútua sem deadlock; o REQUEST/REPLY separado evita o deadlock do ThreadPool; e o Bully detecta a falha do líder e recupera a liderança em ~4 segundos — tudo sobre gRPC/TCP real entre contêineres Docker isolados. Os três algoritmos trabalham juntos como um sistema só. Obrigado."
+🎙️ **Fala:**
+> "Então, pra fechar e amarrar a tese do começo: eu não mostrei três algoritmos isolados, mostrei um sistema integrado. O Lamport deu a ordem causal que serviu de critério pro Ricart-Agrawala garantir exclusão mútua **sem coordenador e sem deadlock** — e o deadlock foi evitado por uma decisão consciente de separar REQUEST de REPLY. Por cima disso, o Bully deu tolerância a falha, detectando e reelegendo o líder em poucos segundos. E tudo sobre comunicação real, gRPC e TCP, entre contêineres isolados. Os três conceitos da disciplina conversando como um organismo só. Era isso que eu queria demonstrar. Muito obrigado, e fico à disposição pra perguntas."
 
 ### 🖥️ Terminal A — encerrar:
 ```bash
