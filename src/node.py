@@ -12,6 +12,7 @@ TODA chamada gRPC sai daqui (camada de rede). Os modulos de algoritmo
 (ricart_agrawala.py, bully.py) permanecem puros (logica de decisao).
 """
 
+import os
 import random
 import threading
 import time
@@ -27,8 +28,15 @@ from src.lamport_clock import LamportClock
 from src.ricart_agrawala import RicartAgrawala
 from src.bully import BullyElection
 from src.server import NodeServiceHandler
-from src.logger import NodeLogger, enable_ansi
+from src.logger import NodeLogger, enable_ansi, record_msg
+from src.dashboard_api import start_dashboard_api
 from src import config
+
+DASHBOARD_PORT = int(os.environ.get("DASHBOARD_PORT", "8000"))
+# Se, ao esperar REPLYs, algum peer nao responder um heartbeat dentro deste
+# tempo, ele e considerado fora do ar e a espera pelo REPLY dele e liberada
+# (evita deadlock quando um no cai devendo REPLYs adiados).
+REPLY_LIVENESS_TIMEOUT = 3.0
 
 RPC_TIMEOUT = 3
 HEARTBEAT_INTERVAL = 2.0
@@ -45,6 +53,9 @@ class Node:
         enable_ansi()
         self.node_id, self.peers_map, self.cs_interval = config.load()
         peer_ids = sorted(self.peers_map.keys())
+        # AUTO_CS=1 -> tenta entrar na Regiao Critica periodicamente sozinho.
+        # AUTO_CS=0 (padrao) -> so entra quando o usuario clica "Pedir RC".
+        self.auto_cs = os.environ.get("AUTO_CS", "0") == "1"
 
         self.log = NodeLogger(self.node_id)
         self.clock = LamportClock(self.node_id, self.log)
@@ -56,14 +67,124 @@ class Node:
         self._stop = threading.Event()
         self._cs_event = threading.Event()
         self._ready = threading.Event()
+        # Simulacao de queda controlada pelo dashboard (botao "Matar no").
+        self._killed = threading.Event()
+        # "Portao" de pausa: SET = rodando, CLEAR = pausado. Quando pausado, os
+        # loops de fundo (heartbeat, secao critica) bloqueiam e o tempo/relogio
+        # de Lamport param de avancar -- congelamento real da simulacao.
+        self._pause_gate = threading.Event()
+        self._pause_gate.set()
+        # Acorda o cs_loop para tentar a Regiao Critica imediatamente (botao
+        # "Pedir Regiao Critica"), sem esperar o intervalo automatico.
+        self._cs_trigger = threading.Event()
 
         self.log.info(
             f"Node {self.node_id} inicializado | "
-            f"Peers: {peer_ids} | CS_INTERVAL: {self.cs_interval}s"
+            f"Peers: {peer_ids} | CS_INTERVAL: {self.cs_interval}s | "
+            f"Regiao Critica: {'AUTOMATICA' if self.auto_cs else 'MANUAL (botao Pedir RC)'}"
         )
 
     def is_ready(self) -> bool:
         return self._ready.is_set()
+
+    # ==================================================================
+    # Controles do dashboard (introspeccao + acoes ao vivo)
+    # ==================================================================
+
+    def is_killed(self) -> bool:
+        return self._killed.is_set()
+
+    def dashboard_state(self) -> dict:
+        """Estado atual do no, consumido pelo dashboard web via HTTP."""
+        snap = self.ra.snapshot()
+        return {
+            "node_id": self.node_id,
+            "lamport": self.clock.time,
+            "leader": self.bully.get_leader(),
+            "is_leader": self.bully.is_leader(),
+            "cs_state": snap["state"],
+            "request_ts": snap["request_ts"],
+            "pending": snap["pending"],
+            "deferred": snap["deferred"],
+            "killed": self.is_killed(),
+            "paused": not self._pause_gate.is_set(),
+            "election_in_progress": self.bully.is_election_in_progress(),
+        }
+
+    def simulate_kill(self) -> None:
+        """Simula a QUEDA do no: para de responder gRPC e pausa os loops.
+
+        Os demais nos detectam a falha (heartbeat sem resposta) e, se este era
+        o lider, disparam a reeleicao Bully -- exatamente como um `docker stop`,
+        porem controlavel pela UI.
+        """
+        if self._killed.is_set():
+            return
+        self._killed.set()
+        # Desbloqueia quem estiver esperando (ex.: aguardando entrar na CS),
+        # para que o loop perceba a "morte" e pause.
+        self._cs_event.set()
+        self._cs_trigger.set()
+        self.log.warn(
+            f"Node {self.node_id} | 💀 SIMULANDO QUEDA (parou de responder). "
+            f"Os outros nos vao detectar a falha."
+        )
+
+    def revive(self) -> None:
+        """Revive o no e reintegra ao cluster, disparando uma eleicao."""
+        if not self._killed.is_set():
+            return
+        self._killed.clear()
+        self.log.info(
+            f"Node {self.node_id} | ♻️  REVIVIDO. Reintegrando ao cluster e "
+            f"disparando eleicao..."
+        )
+        threading.Thread(target=self.run_election, daemon=True).start()
+
+    def pause(self) -> None:
+        """Congela a simulacao deste no (loops de fundo bloqueiam)."""
+        if self._pause_gate.is_set():
+            self._pause_gate.clear()
+            self.log.info(f"Node {self.node_id} | ⏸️  PAUSADO (tempo congelado).")
+
+    def resume(self) -> None:
+        """Retoma a simulacao do ponto exato em que parou."""
+        if not self._pause_gate.is_set():
+            self._pause_gate.set()
+            self.log.info(f"Node {self.node_id} | ▶️  RETOMADO.")
+
+    def _block_while_paused(self) -> None:
+        """Bloqueia enquanto o no estiver pausado (sem consumir tempo)."""
+        while not self._pause_gate.is_set():
+            if self._stop.is_set():
+                return
+            self._pause_gate.wait(0.15)
+
+    def _pausable_wait(self, duration: float) -> None:
+        """Espera `duration` segundos, mas CONGELA a contagem enquanto pausado.
+
+        Usado no tempo de posse da Regiao Critica e no intervalo do heartbeat,
+        para que uma pausa nao deixe o tempo passar "por baixo".
+        """
+        remaining = duration
+        while remaining > 0 and not self._stop.is_set():
+            self._block_while_paused()
+            if self._stop.is_set():
+                return
+            step = 0.1 if remaining > 0.1 else remaining
+            if self._stop.wait(step):
+                return
+            remaining -= step
+
+    def force_cs_request(self) -> None:
+        """Acorda o cs_loop para tentar entrar na Regiao Critica agora."""
+        if self._killed.is_set():
+            return
+        self.log.ricart(
+            f"Node {self.node_id} | (dashboard) Pedido manual de Regiao Critica.",
+            level="want",
+        )
+        self._cs_trigger.set()
 
     # ==================================================================
     # Canais gRPC e stubs
@@ -101,10 +222,12 @@ class Node:
                     if stub is None:
                         continue
                     ts = self.clock.tick()
-                    stub.Heartbeat(
+                    pong = stub.Heartbeat(
                         pb.Ping(node_id=self.node_id, lamport_ts=ts),
                         timeout=PEER_WAIT_SLEEP,
                     )
+                    new = self.clock.update(pong.lamport_ts, from_node=pid)
+                    record_msg(pid, self.node_id, "PONG", new)
                     ready.add(pid)
                     self.log.net(
                         f"Node {self.node_id} | Peer {pid} respondeu! "
@@ -145,8 +268,14 @@ class Node:
             )
             return None
 
+    # NOTA: as mensagens sao registradas para a animacao no RECEPTOR (server.py
+    # e o retorno do Pong abaixo), ja com o clock de Lamport resultante -- assim
+    # a bolinha e o numero do relogio ficam sincronizados no painel.
+
     def send_request(self, peer_id: int, ts: int) -> None:
         msg = pb.CsRequest(node_id=self.node_id, lamport_ts=ts)
+        # A tolerancia a falha (peer caido) e tratada pelo cs_loop, que verifica
+        # a vivacidade dos pendentes via heartbeat (ver _resolve_dead_pending).
         self._safe_rpc(peer_id, "RequestAccess", msg)
 
     def send_reply(self, peer_id: int) -> None:
@@ -176,45 +305,123 @@ class Node:
         if stub is None:
             return None
         try:
-            return stub.Heartbeat(msg, timeout=HEARTBEAT_TIMEOUT)
+            pong = stub.Heartbeat(msg, timeout=HEARTBEAT_TIMEOUT)
         except grpc.RpcError:
             return None
+        # Recebemos o Pong (a confirmacao de que o peer esta vivo). Isso e uma
+        # RECEPCAO de mensagem, entao o relogio de Lamport tem que evoluir aqui
+        # tambem: C = max(C, ts_recebido) + 1. (Antes so o lado que RECEBIA o
+        # ping atualizava; o lado que pingava ignorava o timestamp da volta.)
+        new = self.clock.update(pong.lamport_ts, from_node=peer_id)
+        # Bolinha de VOLTA (Pong): lider -> este no, ja com o clock resultante.
+        record_msg(peer_id, self.node_id, "PONG", new)
+        return pong
 
     # ==================================================================
     # Secao Critica (loop de contencao + execucao)
     # ==================================================================
 
     def cs_loop(self) -> None:
-        """Thread que periodicamente tenta entrar na Secao Critica."""
-        initial_delay = random.uniform(1, self.cs_interval)
-        time.sleep(initial_delay)
+        """Thread que tenta entrar na Secao Critica.
+
+        Dois modos (controlados pela env AUTO_CS):
+          - AUTO_CS=1: o no tenta entrar periodicamente, sozinho (comportamento
+            "vivo" classico).
+          - AUTO_CS=0 (padrao): MANUAL. O no so tenta entrar quando o usuario
+            clica em "Pedir RC" no painel. Assim a Regiao Critica fica vazia
+            ate voce pedir -- ideal para conduzir a demonstracao na mao.
+        """
+        if self.auto_cs:
+            self._cs_trigger.wait(random.uniform(1, self.cs_interval))
 
         while not self._stop.is_set():
-            self._cs_event.clear()
-
-            ts, targets = self.ra.request_cs()
-            for pid in targets:
-                self.send_request(pid, ts)
-
-            self._cs_event.wait()
-
+            # Pausado: congela o loop da Regiao Critica.
+            self._block_while_paused()
             if self._stop.is_set():
                 return
 
-            self.do_critical_section()
-            jitter = random.uniform(0.5 * self.cs_interval, 1.5 * self.cs_interval)
-            self._stop.wait(jitter)
+            # No "morto" (simulacao de queda): nao disputa a Regiao Critica.
+            if self._killed.is_set():
+                self._stop.wait(0.5)
+                continue
+
+            if self.auto_cs:
+                self._cs_trigger.clear()
+                self._run_one_cs_cycle()
+                if self._stop.is_set():
+                    return
+                jitter = random.uniform(0.5 * self.cs_interval, 1.5 * self.cs_interval)
+                # Acorda antes se o dashboard pedir Regiao Critica manualmente.
+                self._cs_trigger.wait(jitter)
+            else:
+                # Modo manual: dorme ate o usuario clicar "Pedir RC".
+                if not self._cs_trigger.wait(0.5):
+                    continue
+                self._cs_trigger.clear()
+                if self._killed.is_set() or self._stop.is_set():
+                    continue
+                self._run_one_cs_cycle()
+
+    def _run_one_cs_cycle(self) -> None:
+        """Executa uma tentativa completa de entrar e sair da Secao Critica."""
+        self._cs_event.clear()
+
+        ts, targets = self.ra.request_cs()
+        for pid in targets:
+            self.send_request(pid, ts)
+
+        # Espera todos os REPLYs. Mas nao espera para sempre: a cada
+        # REPLY_LIVENESS_TIMEOUT, checa se algum peer pendente caiu (para
+        # nao travar eternamente esperando o REPLY de um no morto).
+        while not self._cs_event.wait(REPLY_LIVENESS_TIMEOUT):
+            if self._stop.is_set() or self._killed.is_set():
+                return
+            self._block_while_paused()   # nao verifica vivacidade enquanto pausado
+            if self._stop.is_set() or self._killed.is_set():
+                return
+            self._resolve_dead_pending()
+
+        if self._stop.is_set() or self._killed.is_set():
+            return
+
+        self.do_critical_section()
+
+    def _resolve_dead_pending(self) -> None:
+        """Destrava a espera por REPLYs de peers que cairam.
+
+        Para cada peer de quem ainda esperamos REPLY, manda um heartbeat:
+          - se responde, o peer esta VIVO (so esta adiando) -> continua esperando;
+          - se nao responde, o peer esta MORTO -> tratamos como permissao
+            concedida (um no fora do ar nao pode estar na Regiao Critica).
+        Assim, matar um no nunca congela a exclusao mutua dos demais.
+        """
+        snap = self.ra.snapshot()
+        if snap["state"] != "WANTED":
+            return
+        for pid in snap["pending"]:
+            if self._stop.is_set() or self._killed.is_set():
+                return
+            if self.send_heartbeat(pid) is None:
+                self.log.warn(
+                    f"Node {self.node_id} | Node {pid} nao respondeu ao heartbeat; "
+                    f"considerado fora do ar. Liberando a espera pelo REPLY dele."
+                )
+                if self.ra.on_reply(pid):
+                    self.notify_cs_acquired()
 
     def do_critical_section(self) -> None:
         """Executa o 'trabalho' na Secao Critica e libera ao sair."""
-        duration = random.uniform(1.0, 3.0)
+        # No modo manual, segura a Regiao Critica por mais tempo para dar
+        # folga para narrar / pausar a tela durante a apresentacao.
+        duration = random.uniform(1.0, 3.0) if self.auto_cs else random.uniform(5.0, 7.0)
         self.log.ricart(
             f"Node {self.node_id} | >>> TRABALHANDO na Secao Critica "
             f"por {duration:.1f}s... (Lamport: {self.clock.time})",
             level="enter",
         )
 
-        self._stop.wait(duration)
+        # Congela a posse da Regiao Critica se a simulacao for pausada.
+        self._pausable_wait(duration)
 
         deferred = self.ra.release_cs()
         for pid in deferred:
@@ -233,6 +440,8 @@ class Node:
     # ==================================================================
 
     def run_election(self) -> None:
+        if self._killed.is_set():
+            return
         higher = self.bully.start_election()
 
         if not higher:
@@ -282,6 +491,16 @@ class Node:
     def heartbeat_loop(self) -> None:
         time.sleep(HEARTBEAT_INTERVAL)
         while not self._stop.is_set():
+            # Pausado: congela (nao pinga, nao evolui relogio).
+            self._block_while_paused()
+            if self._stop.is_set():
+                return
+
+            # No "morto": nao monitora nem dispara eleicoes ate ser revivido.
+            if self._killed.is_set():
+                self._stop.wait(HEARTBEAT_INTERVAL)
+                continue
+
             leader = self.bully.get_leader()
 
             if leader is None:
@@ -297,7 +516,7 @@ class Node:
                     self.bully.report_leader_failure(leader)
                     self.run_election()
 
-            self._stop.wait(HEARTBEAT_INTERVAL)
+            self._pausable_wait(HEARTBEAT_INTERVAL)
 
     # ==================================================================
     # Eleicao inicial
@@ -323,6 +542,9 @@ class Node:
         self.log.net(
             f"Node {self.node_id} | Servidor gRPC escutando em 0.0.0.0:{port}"
         )
+
+        # Sobe a API HTTP de introspeccao/controle para o dashboard web.
+        start_dashboard_api(self, DASHBOARD_PORT)
 
         self.wait_for_peers()
         self._ready.set()

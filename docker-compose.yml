@@ -7,6 +7,8 @@ services:
       - NODE_ID=1
       - PEERS=node1:50051,node2:50051,node3:50051,node4:50051,node5:50051
       - CS_INTERVAL=5
+    ports:
+      - "18001:8000"   # dashboard API HTTP do node1 (localhost:18001)
     networks:
       - cluster
 
@@ -18,6 +20,8 @@ services:
       - NODE_ID=2
       - PEERS=node1:50051,node2:50051,node3:50051,node4:50051,node5:50051
       - CS_INTERVAL=5
+    ports:
+      - "18002:8000"   # dashboard API HTTP do node2 (localhost:18002)
     networks:
       - cluster
 
@@ -29,6 +33,8 @@ services:
       - NODE_ID=3
       - PEERS=node1:50051,node2:50051,node3:50051,node4:50051,node5:50051
       - CS_INTERVAL=5
+    ports:
+      - "18003:8000"   # dashboard API HTTP do node3 (localhost:18003)
     networks:
       - cluster
 
@@ -40,6 +46,8 @@ services:
       - NODE_ID=4
       - PEERS=node1:50051,node2:50051,node3:50051,node4:50051,node5:50051
       - CS_INTERVAL=5
+    ports:
+      - "18004:8000"   # dashboard API HTTP do node4 (localhost:18004)
     networks:
       - cluster
 
@@ -51,6 +59,22 @@ services:
       - NODE_ID=5
       - PEERS=node1:50051,node2:50051,node3:50051,node4:50051,node5:50051
       - CS_INTERVAL=5
+    ports:
+      - "18005:8000"   # dashboard API HTTP do node5 (localhost:18005)
+    networks:
+      - cluster
+
+  # Painel web visual da demonstracao. Serve apenas a pagina estatica; o
+  # navegador (no host) fala direto com cada no via localhost:1800X.
+  dashboard:
+    image: python:3.11-slim
+    container_name: dashboard
+    working_dir: /dashboard
+    volumes:
+      - ./dashboard:/dashboard:ro
+    command: python -m http.server 8080
+    ports:
+      - "8080:8080"    # abra http://localhost:8080
     networks:
       - cluster
 

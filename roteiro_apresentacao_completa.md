@@ -1,22 +1,33 @@
 # Roteiro de Apresentação Completa — Trabalho 2 MC714
 
-> **Como usar:** este roteiro intercala os **12 slides** (`apresentacao_projeto.html`) com o **hands-on no terminal** (`ROTEIRO_VIDEO.md`).
+> **Como usar:** este roteiro intercala os **12 slides** (`apresentacao_projeto.html`) com o **hands-on no PAINEL VISUAL** (`http://localhost:8080`).
 > Os blocos **"🎙️ Fala"** são escritos para serem **lidos em voz alta de forma corrida** — linguagem natural, como se você estivesse explicando para a turma, não recitando o slide.
-> Marcações: 🖥️ = vá para o terminal · 📊 = slides · 🔴 AO VIVO = ação executada na hora.
+> Marcações: 🖥️ = vá para o **dashboard** · 📊 = slides · 🔴 AO VIVO = ação executada na hora (clicar num botão do painel).
 > Texto entre *[colchetes em itálico]* é **indicação de cena**, não para ler.
+
+> **O que mudou (por que o painel):** antes tudo era log rolando no terminal e ficava difícil ver os três algoritmos ao mesmo tempo. Agora tem um **painel visual em rede** onde dá pra *enxergar* o sistema funcionando: os cinco nós desenhados num pentágono, com as **mensagens voando entre eles** em tempo real, coloridas por tipo (amarelo = REQUEST, verde = REPLY, roxo = ELECTION, laranja = COORDINATOR, cinza = heartbeat ida e volta). O número do relógio de Lamport de cada nó só sobe **no instante em que a bolinha pousa nele** — a animação e o relógio ficam perfeitamente sincronizados. Cada nó mostra seu relógio de Lamport, fica com anel verde brilhando quando entra na região crítica e ganha uma coroa quando é o líder. Embaixo, um painel de logs colorido pra você narrar. **Você dispara tudo pela UI** — eleição, matar nó, pedir região crítica — sem decorar comando.
 
 ---
 
 ## Preparação (antes de gravar)
 
 1. **Slides** em tela cheia (`apresentacao_projeto.html`), navegação por ← →.
-2. **Dois terminais** lado a lado, fonte grande:
-   - **Terminal A** (principal): `docker compose`.
-   - **Terminal B** (falha): `docker stop`/`start`.
-3. Cluster parado: `docker compose down`.
-4. Cronômetro à vista. Meta: ~10 min.
+2. **Sobe o cluster** e **abre o painel** (só isso — sem dois terminais):
+   ```bash
+   docker compose up --build      # sobe os 5 nós + o dashboard
+   ```
+   Depois abra **http://localhost:8080** no navegador.
+3. Layout de gravação sugerido: **slides em uma metade da tela, o painel na outra**. Um terminal pequeno atrás é opcional (só se quiser mostrar os logs "crus" em algum momento).
+4. Antes de começar, garanta cluster limpo: `docker compose down`.
+5. Cronômetro à vista. Meta: ~10 min.
 
-> **Lógica da apresentação:** explico cada algoritmo no slide e, logo em seguida, mostro ele *acontecendo de verdade* no terminal. A teoria (slides 1–8) vem antes do `up`; o cluster sobe enquanto narro Lamport e Ricart; o `docker stop` ao vivo cai no slide 9; os slides 10–12 fecham amarrando tudo.
+> **Lógica da apresentação:** explico cada algoritmo no slide e, logo em seguida, mostro ele *acontecendo de verdade* no painel. A teoria (slides 1–8) vem antes do `up`; o cluster sobe e o painel ganha vida enquanto narro Lamport e Ricart; o **botão "Matar" no líder** cai no slide 9; os slides 10–12 fecham amarrando tudo.
+>
+> **Controles do painel:** abaixo do grafo há uma barra com os cinco nós, cada um com três botões — **⚡ Eleição** (dispara uma eleição Bully a partir daquele nó), **💀 Matar / ♻️ Reviver** (simula a queda do nó — os outros detectam e reelegem), **🔓 Pedir RC** (faz o nó pedir a região crítica). Em cima, o painel **"Região Crítica"** mostra quem está dentro — a prova visual da exclusão mútua. Há também um toggle **"mostrar heartbeats"**: deixe ligado pra mostrar o sistema "respirando", ou desligue pra limpar a tela e focar só no algoritmo do momento.
+>
+> **⏸️ Botão Pausar (seu melhor amigo na gravação):** congela a simulação **de verdade** — não é só a tela. Cada nó para seus loops de fundo, então o tempo e os relógios de Lamport param de avançar e os pacotes ficam parados no ar. Use sempre que quiser explicar com calma sem que nada continue mudando. Clique em **▶️ Continuar** e tudo retoma do ponto exato — nenhum tempo passou durante a pausa. Aparece um selo **"⏸ PAUSADO"** no canto pra você saber que está congelado.
+>
+> **A Região Crítica é MANUAL:** os nós **não** entram na região crítica sozinhos — ela fica **vazia** até você clicar em **🔓 Pedir RC**. Ou seja, VOCÊ decide quem tenta entrar e quando. Quando um nó entra, ele segura a região crítica por uns 5–6 segundos (tempo de sobra pra você narrar ou pausar).
 
 ---
 
@@ -125,26 +136,26 @@ cat docker-compose.yml
 
 ## BLOCO 3 — DEMO: subindo o cluster + eleição inicial (3:30 – 5:00)
 
-### 🖥️ Terminal A — execute:
+### 🖥️ Suba o cluster (se ainda não subiu) e abra o painel:
 ```bash
 docker compose up --build
 ```
-> *[Deixe os slides na lateral ou volte ao slide 8 — a teoria de Bully casa com o que vai aparecer.]*
+> Abra **http://localhost:8080**. *[Deixe os slides na lateral ou volte ao slide 8 — a teoria de Bully casa com o que vai aparecer no painel.]*
 
-🎙️ **Fala** *[enquanto os logs sobem]*:
-> "Pronto, estou subindo os cinco nós de uma vez. E repara que nenhum deles nasce sabendo quem são os vizinhos. Então a primeira coisa que cada um faz é se apresentar e procurar os outros."
+🎙️ **Fala** *[enquanto o grafo ganha vida e as mensagens começam a voar]*:
+> "Pronto, subi os cinco nós de uma vez, e é isso que vocês estão vendo: cada bolinha é um nó, um contêiner separado, e essas mensagens que voam de um pro outro são as chamadas gRPC de verdade acontecendo na rede. Repara que nenhum nó nasce sabendo quem são os vizinhos. Então a primeira coisa que cada um faz é se apresentar e procurar os outros — são esses pacotes indo e voltando."
 
-**1. Discovery** — aponte para `📡 [NET]`:
-> "São essas linhas de NET aqui. Cada nó fica chamando os outros até confirmar que todo mundo está de pé — dá pra ver o contador subindo, 'um de quatro prontos', 'dois de quatro', até 'todos os quatro prontos'. Só depois disso ele começa a participar pra valer."
+**1. Discovery** — *[aponte os pacotes cinza (heartbeat) e, nos logs, filtre por "Rede/Sistema"]*:
+> "Esse vai-e-vem cinza é o discovery: cada nó fica chamando os outros até confirmar que todo mundo está de pé. Nos logs dá pra ler 'um de quatro prontos', 'dois de quatro', até 'todos prontos'. Só depois disso ele começa a participar pra valer."
 
-**2. Eleição Bully inicial** — aponte para `👑 [BULLY]`:
-> "Assim que ficam prontos, eles já fazem uma eleição pra escolher o líder. E aconteceu certinho o que a teoria diz: os nós menores mandam a eleição pros maiores, e o Node 5, que tem o maior número, não acha ninguém acima dele. Olha a linha dele aqui: 'sou o novo líder, avisando todo mundo, do um ao quatro'."
+**2. Eleição Bully inicial** — *[aponte os pacotes roxos/laranja e a coroa 👑 pousando no Node 5]*:
+> "Assim que ficam prontos, eles já fazem uma eleição pra escolher o líder — são essas mensagens roxas de eleição voando pros nós maiores. E olha o resultado: a coroa apareceu no Node 5. Foi certinho o que a teoria diz — os nós menores mandam a eleição pros maiores, e o Node 5, que tem o maior número, não acha ninguém acima dele e se declara líder."
 
-**3. COORDINATOR aceito:**
-> "E os outros todos aceitam: 'reconhece o Node 5 como líder'. Em uma fração de segundo o cluster já escolheu um líder, sem eu ter configurado nada na mão."
+**3. COORDINATOR aceito** — *[filtre os logs por "Bully" pra mostrar]*:
+> "E, filtrando os logs por Bully, dá pra ler os outros aceitando: 'reconhece o Node 5 como líder'. Em uma fração de segundo o cluster escolheu um líder sozinho — a coroa no painel mostra isso de um jeito que não tem erro."
 
 **4. ⚠️ Antecipando a dúvida da redundância** *[fale isso ANTES que percebam, mostra domínio]*:
-> "E eu queria já adiantar uma coisa que vocês vão reparar: o Node 5 aparece se declarando líder mais de uma vez aqui nos logs. Isso é esperado e está certo.
+> "E eu queria já adiantar uma coisa que aparece nos logs: o Node 5 se declara líder mais de uma vez ali no comecinho. Isso é esperado e está certo.
 >
 > Como cada nó faz uma eleição na hora que entra no cluster, e eles entram com uns segundinhos de diferença, a eleição acaba acontecendo algumas vezes nesse comecinho.
 >
@@ -154,54 +165,55 @@ docker compose up --build
 
 ## BLOCO 4 — DEMO: Relógio de Lamport ao vivo (5:00 – 5:45)
 
-### 📊 Volte ao Slide 4 por uns segundos, depois 🖥️ Terminal A.
+### 📊 Volte ao Slide 4 por uns segundos, depois 🖥️ aponte para o **⏱ dentro de cada nó** no grafo.
 
-🎙️ **Fala** — aponte para `🟢 [LAMPORT]`:
-> "Agora olha uma coisa que está rolando o tempo todo, meio que no fundo: o relógio de Lamport mexendo a cada mensagem. Essas linhas verdes aqui são os saltos do contador. E eu queria mostrar um exemplo bem claro: quando o Node 2 termina de subir, ele já está com o relógio mais alto, e quando ele fala com os outros, ele acaba puxando todo mundo pra frente. Olha só:"
+🎙️ **Fala** — *[aponte o número do relógio dentro de cada bolinha; cada pacote que chega faz o número pular]*:
+> "Agora olha uma coisa que está rolando o tempo todo, meio que no fundo: o relógio de Lamport. É esse número com o relóginho dentro de cada nó, e ele muda a cada mensagem que chega — dá até pra ver o número saltar quando um pacote pousa no nó. Repara que os cinco não estão no mesmo número — cada um tem o seu contador lógico.
+>
+> E eles se puxam pra frente: quando um nó com relógio mais alto fala com outro que está mais atrás, o de trás dá um salto pra se ajustar. Dá pra ver isso ao vivo nos números subindo em ritmos diferentes."
 
-- `Node 1 | Clock atualizado: 8 -> 16 (via msg de Node 2)`
-- `Node 3 | Clock atualizado: 8 -> 17 (via msg de Node 2)`
-- `Node 5 | Clock atualizado: 10 -> 19 (via msg de Node 2)`
-
-> "O Node 1 estava no oito e pulou direto pro dezesseis quando recebeu a mensagem. Ele não foi do oito pro nove — ele pegou o maior valor entre o dele e o que chegou, e somou um. É a tal da causalidade acontecendo: quem recebe se ajusta pra nunca parecer que aconteceu antes de quem mandou."
+*[Pra mostrar o salto exato, filtre o painel de logs por "Lamport" — cada linha mostra o "de X para Y".]*
+> "Aqui nos logs, filtrando por Lamport, dá pra ver o salto na íntegra: por exemplo, um nó que estava no oito e, ao receber uma mensagem, pula direto pro dezesseis. Ele não foi do oito pro nove — ele pegou o maior valor entre o dele e o que chegou, e somou um.
+>
+> É a tal da causalidade acontecendo: quem recebe se ajusta pra nunca parecer que aconteceu antes de quem mandou."
 
 ---
 
 ## BLOCO 5 — DEMO: Exclusão mútua Ricart-Agrawala (5:45 – 7:30)
 
 > **Coração da apresentação.** Vá devagar, é aqui que você prova que entende mesmo.
+> O painel foi feito pra este momento: o banner **"Região Crítica"** no topo e os badges dos cards contam a história sozinhos.
 
-### 📊 Tenha o Slide 5 ou o Slide 11 à mão; 🖥️ foco no Terminal A.
+### 📊 Tenha o Slide 5 à mão; 🖥️ foco no grafo — anéis dos nós + banner do topo. *[Dica: desligue "mostrar heartbeats" pra limpar a tela e ver só REQUEST/REPLY.]*
 
-🎙️ **Fala** — aponte conforme cada linha aparece:
-
-**1. REQUEST** (`🟡 [RICART]`):
-> "Agora vamos ver a exclusão mútua acontecendo, que pra mim é a parte mais legal. O Node 1 resolve entrar na seção crítica — é essa linha amarela: 'pedindo a seção crítica, Lamport setenta e oito, esperando quatro respostas'. Ele mandou o pedido pros quatro vizinhos e agora fica esperando a permissão de todo mundo."
-
-**2. Concessão imediata** (`🟢 [RICART]`):
-> "Como nesse momento ninguém mais quer entrar, todos liberam na hora — 'liberando o Node 1 na hora'. Ele junta as quatro permissões e entra: 'entrou na seção crítica'."
-
-**3. O ADIAMENTO — o momento-chave** (`🔴 [RICART]`):
-> "E agora vem a parte que eu mais queria mostrar. Enquanto o Node 1 está lá dentro trabalhando, o Node 5 e o Node 2 também resolvem pedir a seção crítica. Olha o que o Node 1 faz:"
-- `🔴 Node 1 | Pedido do Node 5 ADIADO (minha prioridade: (ts=78,id=1) < (ts=96,id=5))`
-- `🔴 Node 1 | Pedido do Node 2 ADIADO (minha prioridade: (ts=78,id=1) < (ts=100,id=2))`
-> "Ele compara: o tempo dele é setenta e oito, o do Node 5 é noventa e seis. Setenta e oito é menor, então o Node 1 tem a vez e segura a resposta — repara que ele não nega, ele só guarda pra responder depois.
+**1. Um pedido isolado** — 🔴 AO VIVO *[a região crítica está VAZIA; clique em "🔓 Pedir RC" em UM nó, ex.: Node 3]*:
+> "Agora a parte que pra mim é a mais legal, a exclusão mútua. Repara no banner: a região crítica está livre, ninguém dentro. Eu que controlo quem tenta entrar — então deixa eu pedir a região crítica pro Node 3.
 >
-> E olha que coisa boa, que prova que não tem ninguém centralizando: o próprio Node 5, antes mesmo de entrar, já guarda o pedido do Node 2, porque noventa e seis é menor que cem.
->
-> Cada nó, sozinho, comparando só os tempos, chega na mesma fila. A ordem aparece sozinha."
+> Olha o que acontece: saem dele quatro pacotes amarelos de uma vez — são os REQUESTs, ele pedindo permissão pra todos os vizinhos. Ele ganha o anel amarelo, 'quero entrar', junta as respostas e o anel fica verde: entrou. O banner agora mostra o Node 3 lá dentro."
 
-**4. SAÍDA + REPLY proativo** (`🔵 [RICART]`):
-> "Quando o Node 1 termina, ele sai e já manda na hora a resposta pra quem ele tinha deixado esperando — essa linha azul: 'saiu da seção crítica, mandando a resposta guardada pro dois e pro cinco'. É só nesse momento que o próximo da fila consegue entrar."
+**2. Forçando a disputa** — 🔴 AO VIVO *[enquanto um nó está dentro, clique em "🔓 Pedir RC" em outros dois ou três nós]*:
+> "E se dois quiserem ao mesmo tempo? Deixa eu provocar isso: com o Node 3 ainda dentro, vou pedir a região crítica pra mais dois ou três nós. Olha a chuva de pacotes amarelos — todos pedindo ao mesmo tempo. Vários ficam com o anel amarelo, 'quero entrar', mas presta atenção no banner: ele continua deixando **um** entrar de cada vez. Ninguém fura a fila.
+>
+> *[Dica: aqui é um ótimo momento pra clicar em ⏸️ Pausar e explicar a regra de prioridade com a tela congelada.]*"
 
-**5. A SEQUÊNCIA — frase de fechamento** *[diga com calma, é o seu ponto alto]*:
-> "E agora junta tudo e acompanha a ordem em que os nós entraram na seção crítica: primeiro o um, depois o cinco, depois o dois, o três e o quatro.
+**3. O ADIAMENTO — o momento-chave** — *[filtre o painel de logs por "Ricart-Agrawala"]*:
+> "E por baixo desse comportamento tem a regra do algoritmo. Filtrando os logs por Ricart, aparece o que decide a fila: quando dois nós querem entrar juntos, cada um compara o próprio par de tempo e identificador com o do outro.
 >
-> Compara com os tempos de cada um: setenta e oito, noventa e seis, cem, cento e quatro, cento e nove. É exatamente a ordem crescente dos relógios de Lamport.
+> Quem tem o tempo menor passa na frente e **segura** a resposta do outro — repara que ele não nega, ele só guarda pra responder depois. É a linha 'pedido do Node tal ADIADO', com a comparação dos tempos ali do lado.
 >
-> E, em nenhum momento, dois nós estiveram dentro ao mesmo tempo.
+> E olha que coisa boa, que prova que não tem ninguém centralizando: cada nó, sozinho, comparando só os tempos, chega exatamente na mesma fila. A ordem aparece sozinha."
+
+**4. SAÍDA + REPLY proativo** — *[aponte o anel verde apagando e os pacotes verdes de REPLY saindo desse nó]*:
+> "Quando o nó que estava dentro termina, ele sai — o anel verde apaga — e nesse instante saem dele os pacotes verdes de REPLY, a resposta guardada indo pra quem estava esperando. No painel você vê o banner trocar de dono na hora: saiu um, entrou o próximo da fila. Nos logs é a linha azul, 'saiu da região crítica, mandando a resposta guardada pra fulano'."
+
+**5. A SEQUÊNCIA — frase de fechamento** *[diga com calma, é o seu ponto alto; aponte o banner]*:
+> "E é isso que eu queria que ficasse: durante essa disputa toda, o banner nunca acusou dois nós dentro ao mesmo tempo. Um entrou, saiu, o próximo entrou — sempre em ordem, sempre um de cada vez.
+>
+> E essa ordem não é aleatória: é a ordem crescente dos relógios de Lamport. Quem pediu com o tempo menor entrou primeiro.
 >
 > Ou seja: cinco processos separados, sem nenhum chefe, conseguiram organizar perfeitamente quem usa o recurso e quando, usando só os relógios lógicos. É o Ricart-Agrawala funcionando direitinho como a teoria diz."
+
+> 💡 *[Se quiser o exemplo numérico exato: filtre os logs por Ricart e leia uma linha de ADIAMENTO real que apareceu, ex.: "(ts=78,id=1) < (ts=96,id=5)". O painel garante que sempre há um exemplo fresco na tela.]*
 
 ---
 
@@ -211,39 +223,33 @@ docker compose up --build
 🎙️ **Fala:**
 > "Até aqui eu mostrei o sistema funcionando quando tá tudo bem. Mas um sistema distribuído de verdade precisa aguentar uma falha — então agora eu vou quebrar ele de propósito.
 >
-> Cada nó tem uma parte que fica checando o líder a cada dois segundos, pra ver se ele ainda está vivo. O líder agora é o Node 5.
+> Cada nó tem uma parte que fica checando o líder a cada dois segundos, pra ver se ele ainda está vivo — são os heartbeats voando pro nó da coroa. O líder agora é o Node 5.
 >
-> Eu vou simplesmente derrubar o contêiner dele, do nada, como se a máquina tivesse caído, e a gente vê se o cluster se vira sozinho."
+> Eu vou clicar em 'matar' nele, do nada, como se a máquina tivesse caído, e a gente vê se o cluster se vira sozinho."
 
-### 🖥️ 🔴 AO VIVO — Terminal B:
-```bash
-docker stop node5
-```
+### 🖥️ 🔴 AO VIVO — na barra de controles, clique em **💀 Matar** no **Node 5** (o líder):
+> *[O nó vira uma caveira 💀 no grafo e para de trocar mensagens. Observe os outros quatro.]*
 
-🎙️ **Fala** — aponte no Terminal A conforme aparece:
-> "Pronto, derrubei o líder. Vamos esperar uns segundinhos..."
+🎙️ **Fala** — *[aponte para o grafo conforme os nós reagem]*:
+> "Pronto, derrubei o líder. Ele já virou uma caveira e parou de mandar e receber mensagem. Vamos esperar uns segundinhos..."
 
-**1. Detecção** (`👑 [BULLY]`):
-> "Olha aí: 'falha do líder Node 5 detectada'. A checagem não recebeu resposta a tempo e o nó percebeu sozinho que o líder sumiu."
+**1. Detecção** — *[filtre os logs por "Bully"]*:
+> "Olha aí nos logs: 'falha do líder Node 5 detectada'. A checagem não recebeu resposta a tempo e os nós perceberam sozinhos que o líder sumiu."
 
-**2. ELECTION:**
-> "Quem percebeu já começa uma eleição na hora, chamando os nós de número maior. Como o Node 5 caiu, o maior que sobrou vivo é o Node 4, e é ele quem toma a frente."
+**2. ELECTION + COORDINATOR** — *[aponte a coroa 👑 pulando pro Node 4]*:
+> "E aí a mágica no painel: a coroa pula pro Node 4. Quem percebeu a falha já começa uma eleição, chamando os nós de número maior. Como o Node 5 caiu, o maior que sobrou vivo é o Node 4, e é ele quem assume — 'Node 4, sou o novo líder'. Todos os outros passam a reconhecer ele. O sistema escolheu um novo líder sozinho, sem eu fazer nada."
 
-**3. COORDINATOR:**
-> "E olha: 'Node 4, sou o novo líder', e todos os outros passam a reconhecer ele. O sistema escolheu um novo líder sozinho, sem eu fazer nada."
-
-**4. Continuidade** *[esse é o argumento que fecha a robustez]*:
-> "E o que fecha bem o raciocínio: repara que a exclusão mútua não parou. O Ricart-Agrawala continua rodando normal, só que agora com quatro nós em vez de cinco.
+**3. Continuidade** *[esse é o argumento que fecha a robustez; aponte o banner da região crítica]*:
+> "E o que fecha bem o raciocínio: repara que o banner da região crítica **continuou funcionando** o tempo todo. A exclusão mútua não parou — o Ricart-Agrawala segue rodando normal, só que agora com quatro nós em vez de cinco.
 >
-> Perder o líder não derrubou o serviço — e isso faz sentido, porque no Ricart-Agrawala não tem um chefe coordenando a seção crítica mesmo. O líder serve pra outras coisas; o controle de quem entra na seção crítica já é distribuído por natureza.
+> Perder o líder não derrubou o serviço — e isso faz sentido, porque no Ricart-Agrawala não tem um chefe coordenando a região crítica. O líder aqui existe justamente pra isso que eu acabei de mostrar: pra ter o que monitorar e reeleger quando cai. O controle de quem entra na região crítica já é distribuído por natureza.
 >
 > Isso é tolerância a falha de verdade."
 
-### 🖥️ (Opcional) Restaurar — Terminal B:
-```bash
-docker start node5
-```
-> "E pra fechar o ciclo: se eu trouxer o Node 5 de volta, na próxima eleição ele volta a ser o líder, porque continua sendo o de maior número. Então o sistema lida bem tanto com um nó saindo quanto com ele voltando."
+### 🖥️ (Opcional) Restaurar — na barra de controles, clique em **♻️ Reviver** no Node 5:
+> "E pra fechar o ciclo: se eu reviver o Node 5, a coroa volta pra ele — porque na eleição seguinte ele continua sendo o de maior número. Então o sistema lida bem tanto com um nó saindo quanto com ele voltando."
+
+> 💡 *[Alternativa "raiz": em vez do botão, dá pra derrubar o contêiner de verdade num terminal com `docker stop node5` — o efeito no painel é idêntico (o nó fica sem resposta e vira caveira). O botão é mais limpo pra gravação; o `docker stop` é mais "hardcore" se algum professor pedir a queda real do processo.]*
 
 ---
 
@@ -256,12 +262,12 @@ docker start node5
 🖥️ *[opcional]* `cat docker-compose.yml` rápido pra mostrar os cinco serviços.
 
 ### 📊 Slide 11 (Resultados / Logs Didáticos)
-🎙️ **Fala** *[amarrando com o que acabaram de ver]*:
-> "E essa aqui é a legenda dos logs que a gente acabou de acompanhar ao vivo. Eu fiz questão de marcar cada evento com um emoji e dar uma cor pra cada nó, justamente pra facilitar na hora de mostrar.
+🎙️ **Fala** *[amarrando com o que acabaram de ver no painel]*:
+> "E essa aqui é a legenda dos logs que estavam rolando no painel o tempo todo. Eu fiz questão de marcar cada evento com um emoji e dar uma cor pra cada nó, justamente pra facilitar na hora de mostrar — e o painel deixa filtrar por algoritmo, que é o que eu fui fazendo.
 >
-> Verde é o relógio de Lamport saltando; amarelo é alguém pedindo a seção crítica; vermelho é um pedido ficando pra depois por causa da prioridade; o certinho verde é entrar na seção crítica; o azul é sair e liberar quem estava esperando; e a coroa é a eleição.
+> Verde é o relógio de Lamport saltando; amarelo é alguém pedindo a região crítica; vermelho é um pedido ficando pra depois por causa da prioridade; o certinho verde é entrar na região crítica; o azul é sair e liberar quem estava esperando; e a coroa é a eleição.
 >
-> Tudo que eu fui falando está nessas marcações, em tempo real."
+> Então o painel visual e os logs contam a mesma história de dois jeitos: os cards mostram o *estado* de cada nó agora, e os logs mostram o *porquê*, mensagem por mensagem, em tempo real."
 
 ---
 
@@ -286,17 +292,18 @@ docker compose down
 
 ---
 
-## Mapa rápido Slide ↔ Terminal
+## Mapa rápido Slide ↔ Painel
 
-| Momento | Slides | Terminal |
+| Momento | Slides | O que fazer no painel (http://localhost:8080) |
 |---|---|---|
-| Abertura | 1, 2, 3 | `ls`, `cat docker-compose.yml` (opcional) |
+| Abertura | 1, 2, 3 | — (opcional: `cat docker-compose.yml`) |
 | Teoria | 4, 5, 6, 7, 8 | — |
-| Subida + Bully inicial | (8 ao fundo) | `docker compose up --build` → `📡 [NET]`, `👑 [BULLY]` |
-| Lamport ao vivo | 4 | `🟢 [LAMPORT]` (saltos 8→16, 8→17, 10→19) |
-| Ricart-Agrawala | 5 / 11 | `🟡` `🟢` `🔴` `✅` `🔵` (ordem 1→5→2→3→4) |
-| **Matar líder** 🔴 | 9 | **`docker stop node5`** → reeleição p/ Node 4 |
-| Infra + prova | 10, 11 | logs / `docker-compose.yml` |
+| Subida + Bully inicial | (8 ao fundo) | `docker compose up --build` → grafo ganha vida (pacotes voando), **coroa 👑 no Node 5** |
+| Lamport ao vivo | 4 | apontar o **⏱ dentro de cada nó** saltando; filtrar logs por **Lamport** |
+| Ricart-Agrawala | 5 | **banner "Região Crítica"** + anéis dos nós; clicar **🔓 Pedir RC** em 2–3 nós (chuva de pacotes amarelos); filtrar logs por **Ricart** |
+| **Matar líder** 🔴 | 9 | clicar **💀 Matar** no Node 5 → **coroa pula pro Node 4**; filtrar logs por **Bully** |
+| Reviver (opcional) | 9 | clicar **♻️ Reviver** no Node 5 → coroa volta |
+| Infra + prova | 10, 11 | legenda de cores/emojis = painel de logs |
 | Conclusão | 12 | `docker compose down` |
 
 ---
@@ -305,7 +312,10 @@ docker compose down
 
 - [ ] Docker Desktop rodando
 - [ ] `docker compose down` (sem containers antigos)
-- [ ] Slides em tela cheia + dois terminais lado a lado, fonte grande
+- [ ] `docker compose up --build` no ar **e http://localhost:8080 aberto** (grafo com os 5 nós e mensagens voando, coroa no Node 5)
+- [ ] Layout: **slides + painel** dividindo a tela; fonte dos slides grande
 - [ ] Cronômetro visível
 - [ ] Gravação iniciada (tela inteira)
-- [ ] **Lembrar de executar `docker stop node5` ao vivo** — a reeleição NÃO aparece se o cluster só subir
+- [ ] Testar os botões uma vez antes de gravar: **⏸️ Pausar/Continuar**, **🔓 Pedir RC**, **💀 Matar / ♻️ Reviver** no Node 5
+- [ ] Lembrar: a Região Crítica começa **vazia** — nada acontece nela até você clicar **🔓 Pedir RC**
+- [ ] Lembrar: a reeleição só aparece se você **matar o líder ao vivo** (botão 💀 ou `docker stop node5`)

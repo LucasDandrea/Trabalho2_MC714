@@ -13,8 +13,12 @@ separada para nao segurar a thread do ThreadPool do gRPC.
 
 import threading
 
+import grpc
+
 import node_pb2 as pb
 import node_pb2_grpc as pb_grpc
+
+from src.logger import record_msg
 
 
 class NodeServiceHandler(pb_grpc.NodeServiceServicer):
@@ -30,12 +34,23 @@ class NodeServiceHandler(pb_grpc.NodeServiceServicer):
         ts = self.clock.tick()
         return pb.Ack(node_id=self.node.node_id, lamport_ts=ts)
 
+    def _abort_if_dead(self, context) -> None:
+        """Se o no foi 'morto' pelo dashboard, recusa a RPC (simula queda).
+
+        Isso faz os demais nos perceberem a falha (heartbeat sem resposta) e
+        dispararem a reeleicao Bully, exatamente como um `docker stop`.
+        """
+        if self.node.is_killed():
+            context.abort(grpc.StatusCode.UNAVAILABLE, "node down (simulated)")
+
     # ------------------------------------------------------------------
     # Ricart-Agrawala
     # ------------------------------------------------------------------
 
     def RequestAccess(self, request, context):
-        self.clock.update(request.lamport_ts, from_node=request.node_id)
+        self._abort_if_dead(context)
+        new = self.clock.update(request.lamport_ts, from_node=request.node_id)
+        record_msg(request.node_id, self.node.node_id, "REQUEST", new)
         grant_now = self.ra.on_request(request.node_id, request.lamport_ts)
 
         if grant_now:
@@ -48,7 +63,9 @@ class NodeServiceHandler(pb_grpc.NodeServiceServicer):
         return self._ack()
 
     def ReplyAccess(self, request, context):
-        self.clock.update(request.lamport_ts, from_node=request.node_id)
+        self._abort_if_dead(context)
+        new = self.clock.update(request.lamport_ts, from_node=request.node_id)
+        record_msg(request.node_id, self.node.node_id, "REPLY", new)
         entered = self.ra.on_reply(request.node_id)
 
         if entered:
@@ -61,7 +78,9 @@ class NodeServiceHandler(pb_grpc.NodeServiceServicer):
     # ------------------------------------------------------------------
 
     def Election(self, request, context):
-        self.clock.update(request.lamport_ts, from_node=request.node_id)
+        self._abort_if_dead(context)
+        new = self.clock.update(request.lamport_ts, from_node=request.node_id)
+        record_msg(request.node_id, self.node.node_id, "ELECTION", new)
 
         if not self.node.is_ready():
             self.log.net(
@@ -81,7 +100,9 @@ class NodeServiceHandler(pb_grpc.NodeServiceServicer):
         return self._ack()
 
     def Coordinator(self, request, context):
-        self.clock.update(request.lamport_ts, from_node=request.leader_id)
+        self._abort_if_dead(context)
+        new = self.clock.update(request.lamport_ts, from_node=request.leader_id)
+        record_msg(request.leader_id, self.node.node_id, "COORDINATOR", new)
         self.bully.on_coordinator(request.leader_id)
         return self._ack()
 
@@ -90,7 +111,9 @@ class NodeServiceHandler(pb_grpc.NodeServiceServicer):
     # ------------------------------------------------------------------
 
     def Heartbeat(self, request, context):
-        self.clock.update(request.lamport_ts, from_node=request.node_id)
+        self._abort_if_dead(context)
+        new = self.clock.update(request.lamport_ts, from_node=request.node_id)
+        record_msg(request.node_id, self.node.node_id, "HEARTBEAT", new)
         ts = self.clock.tick()
         leader = self.bully.get_leader()
         return pb.Pong(

@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MC714 · Simulação do Cluster Distribuído</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --panel2: #1c2333; --border: #2a3350;
+    --text: #e6edf3; --muted: #8b98b0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: radial-gradient(1200px 700px at 50% -10%, #16203a 0%, var(--bg) 60%);
+    color: var(--text); font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    padding: 18px 22px 34px;
+  }
+  header { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  header h1 { font-size: 20px; margin: 0; }
+  header .sub { color: var(--muted); font-size: 13px; }
+  .msglegend { margin-left: auto; display: flex; gap: 14px; font-size: 12px; flex-wrap: wrap; align-items: center; }
+  .msglegend span { display: flex; align-items: center; gap: 6px; color: var(--muted); }
+  .msglegend i { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+
+  .cs-banner {
+    margin: 14px 0; border-radius: 14px; padding: 13px 20px; background: var(--panel);
+    border: 1px solid var(--border); display: flex; align-items: center; gap: 16px; transition: all .25s ease;
+  }
+  .cs-banner .lbl { font-size: 12px; text-transform: uppercase; letter-spacing: 2px; color: var(--muted); }
+  .cs-banner .val { font-size: 23px; font-weight: 700; }
+  #pauseBtn {
+    margin-left: auto; cursor: pointer; border: 1px solid var(--border); background: var(--panel2);
+    color: var(--text); border-radius: 9px; padding: 10px 18px; font-size: 14px; font-weight: 700;
+    transition: background .15s, border-color .15s;
+  }
+  #pauseBtn:hover { background: #26304a; }
+  #pauseBtn.active { background: #3a2f10; color: #ffd54a; border-color: #6b5610; }
+  .cs-free .val { color: var(--muted); }
+  .cs-busy { box-shadow: 0 0 0 1px currentColor inset, 0 0 30px -8px currentColor; }
+  .cs-violation { border-color: #e74c3c !important; color: #e74c3c !important; animation: blink .5s steps(2) infinite; }
+  @keyframes blink { 50% { opacity: .4; } }
+
+  .stage { position: relative; background: var(--panel); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; }
+  #net { display: block; width: 100%; height: 520px; }
+
+  .controls { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin: 14px 0; }
+  @media (max-width: 900px) { .controls { grid-template-columns: repeat(2, 1fr); } }
+  .ctl { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 10px; border-top: 3px solid var(--nc); }
+  .ctl .h { font-weight: 700; font-size: 13px; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+  .ctl .h .d { width: 9px; height: 9px; border-radius: 50%; background: var(--nc); }
+  .ctl .row { display: flex; gap: 6px; }
+  .ctl button {
+    flex: 1; cursor: pointer; border: 1px solid var(--border); background: var(--panel2); color: var(--text);
+    border-radius: 8px; padding: 8px 2px; font-size: 11px; font-weight: 600; transition: background .15s, transform .05s;
+  }
+  .ctl button:hover { background: #26304a; }
+  .ctl button:active { transform: translateY(1px); }
+  .ctl button.kill { color: #ffb3ab; } .ctl button.revive { color: #9ff0c0; }
+
+  .logwrap { margin-top: 8px; }
+  .logbar { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; flex-wrap: wrap; }
+  .logbar h2 { font-size: 15px; margin: 0; }
+  .filters { display: flex; gap: 8px; flex-wrap: wrap; }
+  .filters label, .logbar .right label {
+    font-size: 12px; color: var(--muted); background: var(--panel); border: 1px solid var(--border);
+    padding: 5px 10px; border-radius: 999px; cursor: pointer; user-select: none; display: flex; gap: 6px; align-items: center;
+  }
+  .logbar .right { margin-left: auto; display: flex; gap: 10px; align-items: center; }
+  #clearlog { cursor: pointer; background: var(--panel2); border: 1px solid var(--border); color: var(--muted); border-radius: 8px; padding: 6px 12px; font-size: 12px; }
+  #log { background: #0a0e14; border: 1px solid var(--border); border-radius: 12px; height: 230px; overflow-y: auto; padding: 10px 14px;
+    font-family: "Cascadia Code", "Consolas", ui-monospace, monospace; font-size: 13px; line-height: 1.6; }
+  #log .row { white-space: pre-wrap; word-break: break-word; }
+  #log .t { color: #55627a; }
+  #log .nb { font-weight: 700; padding: 0 4px; border-radius: 4px; }
+  #log .tag { font-weight: 700; }
+  .tag-lamport { color: #2ecc71; } .tag-ricart { color: #f1c40f; } .tag-bully { color: #f39c12; }
+  .tag-net { color: #7aa2ff; } .tag-info { color: #8b98b0; } .tag-warn { color: #ffb454; } .tag-error { color: #ff6b6b; }
+</style>
+</head>
+<body>
+  <header>
+    <h1>🖧 Simulação do Cluster — MC714</h1>
+    <span class="sub">Lamport · Ricart-Agrawala · Bully · gRPC sobre Docker</span>
+    <div class="msglegend">
+      <span><i style="background:#ffcf33"></i>REQUEST</span>
+      <span><i style="background:#33e0a0"></i>REPLY</span>
+      <span><i style="background:#b07cff"></i>ELECTION</span>
+      <span><i style="background:#ff9f43"></i>COORDINATOR</span>
+      <span><i style="background:#5b6b8c"></i>HEARTBEAT <i style="background:#8fa0c8;margin-left:2px"></i>ida/volta</span>
+    </div>
+  </header>
+
+  <div id="csBanner" class="cs-banner cs-free">
+    <span class="lbl">Região Crítica</span>
+    <span class="val" id="csVal">— sincronizando —</span>
+    <button id="pauseBtn">⏸️ Pausar</button>
+  </div>
+
+  <div class="stage"><canvas id="net"></canvas></div>
+
+  <div class="controls" id="controls"></div>
+
+  <div class="logwrap">
+    <div class="logbar">
+      <h2>📜 Logs ao vivo</h2>
+      <div class="filters" id="filters">
+        <label><input type="checkbox" data-cat="lamport" checked> Lamport</label>
+        <label><input type="checkbox" data-cat="ricart" checked> Ricart-Agrawala</label>
+        <label><input type="checkbox" data-cat="bully" checked> Bully</label>
+        <label><input type="checkbox" data-cat="net" checked> Rede/Sistema</label>
+      </div>
+      <div class="right">
+        <label><input type="checkbox" id="showHb" checked> mostrar heartbeats</label>
+        <label><input type="checkbox" id="autoscroll" checked> auto-scroll</label>
+        <button id="clearlog">limpar</button>
+      </div>
+    </div>
+    <div id="log"></div>
+  </div>
+
+<script>
+const NODES = [1, 2, 3, 4, 5];
+const HEX = { 1:'#2ecc71', 2:'#f1c40f', 3:'#c56cf0', 4:'#4d8bff', 5:'#e74c3c' };
+const MSG_COLOR = { REQUEST:'#ffcf33', REPLY:'#33e0a0', ELECTION:'#b07cff', COORDINATOR:'#ff9f43', HEARTBEAT:'#5b6b8c', PONG:'#8fa0c8' };
+const MSG_DUR   = { REQUEST:900, REPLY:900, ELECTION:1000, COORDINATOR:1100, HEARTBEAT:700, PONG:700 };
+const baseUrl = id => `http://localhost:1800${id}`;
+
+// Estado por nó (alimentado pelo /state)
+const nodeState = {}; NODES.forEach(id => nodeState[id] = { lamport:0, cs_state:'RELEASED', is_leader:false, leader:null, killed:false, offline:true });
+const lastLogSeq = {};
+const lastMsgSeq = {}; const msgFirstLoad = {};
+// Relógio de Lamport EXIBIDO, dirigido pela chegada das bolinhas: o número só
+// sobe quando o pacote correspondente pousa no nó (sincronia total com a UX).
+const shownClock = {}; const clockInit = {};
+NODES.forEach(id => { shownClock[id] = 0; });
+const flash = {};           // id -> timestamp do último "recebimento" (pulso)
+let packets = [];           // pacotes voando
+const pendingReturns = [];   // mensagens de volta (Pong/REPLY) aguardando a ida pousar
+let spawnQueue = [];         // pacotes lançados durante o draw (append pós-filter)
+
+// ---------------- Canvas ----------------
+const canvas = document.getElementById('net');
+const ctx = canvas.getContext('2d');
+let W = 0, H = 0, pos = {}, R = 36;
+
+function resize() {
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  W = rect.width; H = rect.height;
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const cx = W / 2, cy = H / 2 + 6;
+  const rad = Math.min(W, H) * 0.35;
+  R = Math.max(28, Math.min(40, Math.min(W, H) * 0.075));
+  NODES.forEach((id, i) => {
+    const ang = -Math.PI / 2 + i * (2 * Math.PI / 5);
+    pos[id] = { x: cx + rad * Math.cos(ang), y: cy + rad * Math.sin(ang) };
+  });
+}
+window.addEventListener('resize', resize);
+
+function lerp(a, b, t) { return a + (b - a) * t; }
+function easeInOut(t) { return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; }
+
+// Quando a IDA (fwd) pousa no destino, dispara a VOLTA correspondente (mesmo
+// par, direção invertida): Pong responde ao HEARTBEAT, REPLY responde ao REQUEST.
+function launchReturns(fwd, now) {
+  for (let k = 0; k < pendingReturns.length; k++) {
+    const r = pendingReturns[k];
+    if (r.waitKind === fwd.kind && r.src === fwd.dst && r.dst === fwd.src) {
+      pendingReturns.splice(k, 1);
+      spawnQueue.push({ src: r.src, dst: r.dst, kind: r.kind, clock: r.clock, start: now, dur: r.dur });
+      return;
+    }
+  }
+}
+
+let animTime = 0, lastFrame = null, paused = false;
+function draw(realNow) {
+  // Relógio de animação que CONGELA quando pausado: assim os pacotes param
+  // no ar e a tela inteira fica estática para você explicar.
+  if (lastFrame === null) lastFrame = realNow;
+  if (!paused) animTime += realNow - lastFrame;
+  lastFrame = realNow;
+  const now = animTime;
+  ctx.clearRect(0, 0, W, H);
+
+  // arestas (todas as ligações, bem sutis)
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = 'rgba(120,140,180,0.10)';
+  for (let i = 0; i < NODES.length; i++)
+    for (let j = i + 1; j < NODES.length; j++) {
+      const a = pos[NODES[i]], b = pos[NODES[j]];
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    }
+
+  // pacotes
+  packets = packets.filter(p => {
+    const t = (now - p.start) / p.dur;
+    if (t >= 1) {
+      // a bolinha POUSOU: é AGORA que o relógio de Lamport do destino atualiza.
+      flash[p.dst] = now;
+      if (p.clock != null && p.clock > (shownClock[p.dst] || 0)) shownClock[p.dst] = p.clock;
+      // Round-trip: quando a IDA pousa, dispara a VOLTA (Pong após HEARTBEAT, REPLY após REQUEST).
+      if (p.kind === 'HEARTBEAT' || p.kind === 'REQUEST') launchReturns(p, now);
+      return false;
+    }
+    if (t < 0) return true;
+    const a = pos[p.src], b = pos[p.dst];
+    const dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy) || 1;
+    const ux = dx / len, uy = dy / len;
+    const ax = a.x + ux * R, ay = a.y + uy * R;      // sai da borda do nó
+    const bx = b.x - ux * R, by = b.y - uy * R;      // chega na borda do nó
+    const e = easeInOut(t);
+    const x = lerp(ax, bx, e), y = lerp(ay, by, e);
+    const col = MSG_COLOR[p.kind] || '#8899bb';
+    const big = p.kind !== 'HEARTBEAT';
+    // rastro
+    for (let k = 1; k <= 5; k++) {
+      const tt = e - k * 0.045; if (tt <= 0) continue;
+      const tx = lerp(ax, bx, tt), ty = lerp(ay, by, tt);
+      ctx.globalAlpha = (big ? 0.30 : 0.16) * (1 - k / 6);
+      ctx.fillStyle = col; ctx.beginPath();
+      ctx.arc(tx, ty, (big ? 5 : 3) * (1 - k * 0.12), 0, 7); ctx.fill();
+    }
+    // cabeça
+    ctx.globalAlpha = 1; ctx.fillStyle = col;
+    ctx.shadowColor = col; ctx.shadowBlur = big ? 12 : 5;
+    ctx.beginPath(); ctx.arc(x, y, big ? 6 : 3.5, 0, 7); ctx.fill();
+    ctx.shadowBlur = 0; ctx.globalAlpha = 1;
+    return true;
+  });
+
+  // Pacotes de VOLTA disparados NESTE frame entram só agora — se fossem
+  // 'push' durante o filter acima, o reassign do filter os descartaria (bug).
+  if (spawnQueue.length) { for (const q of spawnQueue) packets.push(q); spawnQueue = []; }
+
+  // nós
+  NODES.forEach(id => {
+    const s = nodeState[id], p = pos[id];
+    const dead = s.killed || s.offline;
+    const col = HEX[id];
+
+    // pulso de recebimento
+    const fl = flash[id];
+    if (fl && now - fl < 350) {
+      const k = (now - fl) / 350;
+      ctx.globalAlpha = 0.5 * (1 - k); ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(p.x, p.y, R + 6 + k * 14, 0, 7); ctx.stroke(); ctx.globalAlpha = 1;
+    }
+
+    // anel de estado (região crítica / quer entrar)
+    if (!dead && s.cs_state === 'HELD') {
+      ctx.strokeStyle = '#2ecc71'; ctx.lineWidth = 5; ctx.shadowColor = '#2ecc71'; ctx.shadowBlur = 26;
+      ctx.beginPath(); ctx.arc(p.x, p.y, R + 5, 0, 7); ctx.stroke(); ctx.shadowBlur = 0;
+    } else if (!dead && s.cs_state === 'WANTED') {
+      ctx.strokeStyle = '#f1c40f'; ctx.lineWidth = 3; ctx.setLineDash([5, 5]);
+      ctx.beginPath(); ctx.arc(p.x, p.y, R + 5, 0, 7); ctx.stroke(); ctx.setLineDash([]);
+    }
+
+    // corpo
+    ctx.beginPath(); ctx.arc(p.x, p.y, R, 0, 7);
+    ctx.fillStyle = dead ? '#20252e' : col + '22';
+    ctx.fill();
+    ctx.lineWidth = 3; ctx.strokeStyle = dead ? '#3a4150' : col;
+    if (s.is_leader && !dead) { ctx.shadowColor = '#f1c40f'; ctx.shadowBlur = 22; }
+    ctx.stroke(); ctx.shadowBlur = 0;
+
+    // texto
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    if (dead) {
+      ctx.font = `${R * 0.9}px serif`; ctx.fillText('💀', p.x, p.y);
+    } else {
+      ctx.fillStyle = col; ctx.font = `700 ${R * 0.62}px "Segoe UI", sans-serif`;
+      ctx.fillText('N' + id, p.x, p.y - 6);
+      ctx.fillStyle = '#c9d4e6'; ctx.font = `600 ${R * 0.4}px "Consolas", monospace`;
+      ctx.fillText('⏱ ' + shownClock[id], p.x, p.y + R * 0.46);
+    }
+
+    // coroa do líder
+    if (s.is_leader && !dead) {
+      ctx.font = `${R * 0.8}px serif`; ctx.fillText('👑', p.x, p.y - R - 12);
+    }
+  });
+
+  // selo de PAUSADO
+  if (paused) {
+    ctx.fillStyle = 'rgba(255,213,74,0.95)';
+    ctx.font = '700 15px "Segoe UI", sans-serif';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.fillText('⏸ PAUSADO', 16, 14);
+  }
+
+  requestAnimationFrame(draw);
+}
+
+// ---------------- Controles ----------------
+const controls = document.getElementById('controls');
+NODES.forEach(id => {
+  const el = document.createElement('div');
+  el.className = 'ctl'; el.style.setProperty('--nc', HEX[id]);
+  el.innerHTML = `
+    <div class="h"><span class="d"></span> Node ${id}</div>
+    <div class="row">
+      <button data-a="election">⚡ Eleição</button>
+      <button data-a="request_cs">🔓 Pedir RC</button>
+      <button data-a="killtoggle" class="kill">💀 Matar</button>
+    </div>`;
+  controls.appendChild(el);
+  el.querySelector('[data-a="election"]').onclick   = () => action(id, 'election');
+  el.querySelector('[data-a="request_cs"]').onclick = () => action(id, 'request_cs');
+  const kb = el.querySelector('[data-a="killtoggle"]');
+  kb.onclick = () => {
+    const s = nodeState[id]; const dead = s.killed || s.offline;
+    action(id, dead ? 'revive' : 'kill');
+  };
+  el._killBtn = kb;
+});
+function refreshKillButtons() {
+  NODES.forEach(id => {
+    const kb = controls.children[id - 1]._killBtn;
+    const dead = nodeState[id].killed || nodeState[id].offline;
+    kb.textContent = dead ? '♻️ Reviver' : '💀 Matar';
+    kb.className = dead ? 'revive' : 'kill';
+  });
+}
+async function action(id, path) {
+  try { await fetch(`${baseUrl(id)}/${path}`, { method: 'POST' }); } catch (e) {}
+  tick();
+}
+
+// ---------------- Banner ----------------
+function renderBanner() {
+  const inside = NODES.filter(id => { const s = nodeState[id]; return !s.offline && !s.killed && s.cs_state === 'HELD'; });
+  const banner = document.getElementById('csBanner'), val = document.getElementById('csVal');
+  banner.className = 'cs-banner'; banner.style.color = '';
+  if (inside.length === 0) { banner.classList.add('cs-free'); val.textContent = '🔓 LIVRE — ninguém dentro'; }
+  else if (inside.length === 1) {
+    banner.classList.add('cs-busy'); banner.style.color = HEX[inside[0]];
+    val.innerHTML = `🔒 Ocupada por <b>Node ${inside[0]}</b> &nbsp;·&nbsp; exclusão mútua garantida`;
+  } else {
+    banner.classList.add('cs-violation');
+    val.innerHTML = `⚠️ VIOLAÇÃO: Nodes ${inside.join(', ')} dentro ao mesmo tempo!`;
+  }
+}
+
+// ---------------- Logs ----------------
+const logEl = document.getElementById('log');
+const activeCats = { lamport:true, ricart:true, bully:true, net:true };
+const catOf = c => (c === 'info' || c === 'warn' || c === 'error') ? 'net' : c;
+document.querySelectorAll('#filters input').forEach(chk => {
+  chk.onchange = () => { activeCats[chk.dataset.cat] = chk.checked;
+    logEl.querySelectorAll('.row').forEach(r => r.style.display = activeCats[r.dataset.cat] ? '' : 'none'); };
+});
+document.getElementById('clearlog').onclick = () => logEl.innerHTML = '';
+function appendLog(e) {
+  const cat = catOf(e.category);
+  const row = document.createElement('div');
+  row.className = 'row'; row.dataset.cat = cat;
+  if (!activeCats[cat]) row.style.display = 'none';
+  row.innerHTML = `<span class="t">[${e.time}]</span> ` +
+    `<span class="nb" style="background:${HEX[e.node]}22;color:${HEX[e.node]}">N${e.node}</span> ` +
+    `<span class="tag tag-${e.category}">${e.category.toUpperCase()}</span> ` + escapeHtml(e.msg);
+  logEl.appendChild(row);
+  while (logEl.children.length > 400) logEl.removeChild(logEl.firstChild);
+}
+function escapeHtml(s) { return s.replace(/[&<>]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;' }[c])); }
+
+// ---------------- Polling ----------------
+async function pollNode(id) {
+  let offline = false, logs = [], msgs = [];
+  try {
+    const r = await fetch(`${baseUrl(id)}/state`, { cache: 'no-store' });
+    const s = await r.json();
+    nodeState[id] = { lamport:s.lamport, cs_state:s.cs_state, is_leader:s.is_leader, leader:s.leader, killed:s.killed, paused:s.paused, offline:false };
+    // Semeia o relógio exibido no 1º load; ao retomar do pause, ressincroniza.
+    if (!clockInit[id]) { clockInit[id] = true; shownClock[id] = s.lamport; }
+    if (skipNextMsgAnim) shownClock[id] = Math.max(shownClock[id], s.lamport);
+  } catch (e) { offline = true; nodeState[id].offline = true; }
+
+  if (!offline) {
+    try {
+      const since = lastLogSeq[id] || 0;
+      const d = await (await fetch(`${baseUrl(id)}/logs?since=${since}`, { cache:'no-store' })).json();
+      logs = d.logs || []; if (logs.length) lastLogSeq[id] = logs[logs.length - 1].seq;
+    } catch (e) {}
+    try {
+      const since = lastMsgSeq[id] || 0;
+      const d = await (await fetch(`${baseUrl(id)}/messages?since=${since}`, { cache:'no-store' })).json();
+      msgs = d.messages || []; if (msgs.length) lastMsgSeq[id] = msgs[msgs.length - 1].seq;
+    } catch (e) {}
+  }
+  return { id, offline, logs, msgs };
+}
+
+const showHb = () => document.getElementById('showHb').checked;
+let skipNextMsgAnim = false;
+let pollTimer = null;
+let initialSyncDone = false;
+function startPolling() { if (pollTimer || paused) return; pollTimer = setInterval(tick, 600); }
+function stopPolling() { clearInterval(pollTimer); pollTimer = null; }
+
+// Congela/descongela DE VERDADE os containers (não é só visual): cada nó para
+// seus loops de fundo, então o tempo e o relógio de Lamport param de avançar.
+async function pauseAll()  { await Promise.all(NODES.map(id => fetch(`${baseUrl(id)}/pause`,  { method:'POST' }).catch(()=>{}))); }
+async function resumeAll() { await Promise.all(NODES.map(id => fetch(`${baseUrl(id)}/resume`, { method:'POST' }).catch(()=>{}))); }
+
+const pauseBtn = document.getElementById('pauseBtn');
+function setPauseUi(p) {
+  paused = p;
+  pauseBtn.textContent = p ? '▶️ Continuar' : '⏸️ Pausar';
+  pauseBtn.classList.toggle('active', p);
+}
+
+pauseBtn.onclick = async () => {
+  if (!paused) {
+    setPauseUi(true);      // congela a tela/animação na hora
+    stopPolling();
+    await pauseAll();      // congela os containers (tempo real parado)
+  } else {
+    await resumeAll();     // descongela os containers primeiro
+    skipNextMsgAnim = true; // ao voltar, ignora o backlog
+    setPauseUi(false);
+    await tick();
+    startPolling();
+  }
+};
+
+async function tick() {
+  const results = await Promise.all(NODES.map(pollNode));
+  renderBanner(); refreshKillButtons();
+
+  // Se a página abriu com o backend já pausado, reflete no botão e congela.
+  if (!initialSyncDone) {
+    initialSyncDone = true;
+    if (NODES.some(id => nodeState[id] && nodeState[id].paused)) { setPauseUi(true); stopPolling(); }
+  }
+
+  // logs
+  const batch = [];
+  results.forEach(r => batch.push(...r.logs));
+  batch.sort((a, b) => a.time < b.time ? -1 : a.time > b.time ? 1 : a.node - b.node);
+  const auto = document.getElementById('autoscroll').checked;
+  const atBottom = logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight < 40;
+  batch.forEach(appendLog);
+  if (auto && atBottom) logEl.scrollTop = logEl.scrollHeight;
+
+  // mensagens -> pacotes animados
+  const now = animTime;
+  let i = 0;
+  results.forEach(r => {
+    if (msgFirstLoad[r.id] === undefined && !r.offline) { msgFirstLoad[r.id] = true; return; } // pula histórico
+    if (skipNextMsgAnim) return;   // ao retomar do pause, não anima o acumulado
+    r.msgs.forEach(m => {
+      if ((m.kind === 'HEARTBEAT' || m.kind === 'PONG') && !showHb()) return;
+      if (m.kind === 'PONG') {
+        // Espera o HEARTBEAT (ida) pousar no líder pra virar round-trip.
+        pendingReturns.push({ src: m.src, dst: m.dst, kind: 'PONG', clock: m.clock, dur: MSG_DUR.PONG, waitKind: 'HEARTBEAT', queuedAt: now });
+      } else if (m.kind === 'REPLY') {
+        // Espera o REQUEST (ida) daquele nó pousar pra partir a resposta.
+        pendingReturns.push({ src: m.src, dst: m.dst, kind: 'REPLY', clock: m.clock, dur: MSG_DUR.REPLY, waitKind: 'REQUEST', queuedAt: now });
+      } else {
+        packets.push({ src: m.src, dst: m.dst, kind: m.kind, clock: m.clock, start: now + (i++) * 40, dur: MSG_DUR[m.kind] || 900 });
+      }
+    });
+  });
+  skipNextMsgAnim = false;
+
+  // Rede de segurança: volta sem par recente (ex.: REPLY adiado, cuja ida já
+  // pousou há muito tempo) é solta após um tempinho para não ficar presa.
+  for (let k = pendingReturns.length - 1; k >= 0; k--) {
+    if (now - pendingReturns[k].queuedAt > 1500) {
+      const r = pendingReturns.splice(k, 1)[0];
+      if (r.kind === 'PONG' && !showHb()) continue;   // heartbeat oculto: descarta
+      packets.push({ src: r.src, dst: r.dst, kind: r.kind, clock: r.clock, start: now, dur: r.dur });
+    }
+  }
+  if (pendingReturns.length > 150) pendingReturns.splice(0, pendingReturns.length - 150);
+  if (packets.length > 400) packets.splice(0, packets.length - 400);
+}
+
+resize();
+requestAnimationFrame(draw);
+tick();
+startPolling();
+</script>
+</body>
+</html>
